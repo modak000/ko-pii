@@ -4,6 +4,9 @@ from __future__ import annotations
 from typing import Iterable, Iterator, Optional
 
 from k_pii.core.types import DetectionResult
+from k_pii.domain import civil_petition as _dom_petition
+from k_pii.domain import government as _dom_gov
+from k_pii.domain import hr as _dom_hr
 from k_pii.patterns import (
     account,
     address,
@@ -44,6 +47,10 @@ DETECTORS = (
     address.detect,
     account.detect,
     person.detect,
+    # Domain-specific (Phase 4)
+    _dom_gov.detect,
+    _dom_petition.detect,
+    _dom_hr.detect,
 )
 
 

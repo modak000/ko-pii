@@ -34,6 +34,10 @@ LEGAL_BASIS_BY_LABEL: dict[str, str] = {
     "ADDRESS": "개인정보보호법 제2조",
     # 컨텍스트 기반 (Phase 3)
     "PERSON": "개인정보보호법 제2조",
+    # 도메인 특화 (Phase 4)
+    "DOC_ID": "개인정보보호법 제2조",
+    "PETITION_ID": "개인정보보호법 제2조; 민원처리에 관한 법률",
+    "EMPLOYEE_ID": "개인정보보호법 제2조; 국가공무원법 제22조",
 }
 
 CATEGORY_BY_LABEL: dict[str, str] = {
@@ -55,6 +59,9 @@ CATEGORY_BY_LABEL: dict[str, str] = {
     "URL": "참조정보",
     "ADDRESS": "일반개인정보",
     "PERSON": "일반개인정보",
+    "DOC_ID": "참조정보",
+    "PETITION_ID": "참조정보",
+    "EMPLOYEE_ID": "일반개인정보",
 }
 
 _RISK_FLOOR_BY_LABEL: dict[str, RiskLevel] = {
@@ -76,6 +83,9 @@ _RISK_FLOOR_BY_LABEL: dict[str, RiskLevel] = {
     "URL": RiskLevel.INFO,
     "ADDRESS": RiskLevel.MEDIUM,
     "PERSON": RiskLevel.HIGH,
+    "DOC_ID": RiskLevel.LOW,
+    "PETITION_ID": RiskLevel.LOW,
+    "EMPLOYEE_ID": RiskLevel.MEDIUM,
 }
 
 

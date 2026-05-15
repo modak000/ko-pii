@@ -14,14 +14,14 @@ class TestAddressPositive:
         assert r.label == "ADDRESS"
         assert r.risk_level == RiskLevel.MEDIUM
         assert r.extra["city"] == "서울특별시"
-        assert r.extra["district"] == "강남구"
+        assert "강남구" in r.extra["districts"]
         assert r.extra["road"] == "테헤란로"
         assert r.extra["building_number"] == "123"
 
     def test_gu_only_prefix(self):
         results = _detect_list("강남구 역삼로 45")
         assert len(results) == 1
-        assert results[0].extra["district"] == "강남구"
+        assert "강남구" in results[0].extra["districts"]
 
     def test_with_subbuilding_number(self):
         results = _detect_list("강남구 테헤란로 123-45")

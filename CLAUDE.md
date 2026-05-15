@@ -227,39 +227,41 @@ emit.
 | Phase | 상태 | 결과물 | 비고 |
 |-------|------|--------|------|
 | 1. 결정적 PII (체크섬) | ✅ 완료 | 8 카테고리 + 4 체크섬 모듈 | Day 1~3 |
-| 2. 비검증 PII (베이스라인) | ✅ 완료 | 8 카테고리 + FAX | IPv6/+82/지번 보강 완료 |
+| 2. 비검증 PII (베이스라인) | ✅ 완료 | 8 카테고리 + FAX | IPv6/+82/지번 보강 |
 | 3. 컨텍스트 기반 이름 탐지 | ✅ 베이스라인 완료 | 사전 5종 + context + person.py | 사전 큐레이션은 사용자 입력 |
-| 4. 도메인 특화 (공문서·민원·인사) | ⬜ 미착수 | — | Phase 3 의존 |
+| 4. 도메인 특화 (공문서·민원·인사) | ✅ 베이스라인 완료 | DOC_ID + PETITION_ID + EMPLOYEE_ID | medical은 사용자 입력 대기 |
 | 5. Vault + 모드 + 일반화 | ✅ 완료 | vault + 3 modes + 4 generalizations | JSON schema v1 |
 | 6. 법적 매핑 + 위험도 + 리포팅 | ✅ 완료 | Anonymizer + 5 modes + reporting + CLI | `k-pii` 엔트리포인트 |
-| 7. 평가 + 문서화 | ⬜ 미착수 | — | 합성 데이터 + 벤치마크 |
+| 7. 평가 + 문서화 | ✅ 베이스라인 완료 | 합성기 + 메트릭 + 벤치마크 + docs/ | 합성 50×4seed F1=1.000 |
 
 **누적 수치:**
-- PII 카테고리 18종 (Phase 1·2 17종 + PERSON)
-- 테스트 362개, ~0.3초 (Python 3.13)
+- PII 카테고리 21종 (Phase 1·2 17종 + PERSON + DOC_ID + PETITION_ID + EMPLOYEE_ID)
+- 테스트 394개, ~0.4초 (Python 3.13)
 - 코어 dependencies 0개
-- Lines of code (src+tests) ~5500
+- 합성 코퍼스 50×4seed 에서 **micro F1 = 1.000**
 
 ## 7. 어디서 멈췄나 / 다음에 할 일
 
-**마지막 큰 작업:** Phase 5+6 (Vault·Anonymizer·CLI) + Phase 3 베이스라인 (사전·
-context·person.py) + Phase 2 보강 (IPv6/+82/지번/FAX) 일괄 구현. 테스트 362 passed.
+**마지막 큰 작업:** Phase 7 (평가 인프라) + Phase 4 (도메인 룰) + Phase 3.1 사전
+확장 + docs/ 일괄 구현. 테스트 394 passed, 합성 50×4seed F1=1.000.
 
-**바로 다음 후보:**
+**남은 후보 (모두 사용자 도메인 입력 필요):**
 
-A) **Phase 4 (도메인 특화 룰)** — 공문서/민원/인사별 패턴 컬렉션. 사용자 실무
-   샘플 + 도메인 입력 필요.
+A) **실데이터 벤치마크** — 익명화된 실제 공문서로 합성 코퍼스의 점수가
+   유지되는지 확인. 현재 F1=1.0 은 합성 템플릿이 좁아서 나온 수치이므로
+   실제 분포에서는 더 낮을 가능성.
 
-B) **Phase 7 (평가 + 문서화)** — 합성 공문서 생성 → Precision/Recall/F1 벤치마크.
-   현재 점수 시스템의 가중치를 평가셋 기반으로 튜닝 가능.
+B) **사전 큐레이션 (Phase 3.1 / 4.1)** — 사용자 실무 입력 기반:
+   - 부처·직급별 직책 사전 세분화
+   - 공문서 필드 라벨 — 실무 양식 샘플 필요
+   - 의료 도메인 (KCD/EDI) 포함 여부 결정
 
-C) **Phase 3.1 사전 큐레이션** — 성씨 286개 완본, 부처·직급 세분화, 일반 단어/
-   지명 사전 확장. 사용자 도메인 입력이 핵심.
+C) **계좌·사업자 분기** — 은행별 포맷 / 법인 vs 개인사업자 위험도 분기.
 
-D) **Phase 2 잔여 보강** — 행정구역 사전 통합, 은행별 계좌 포맷 검증.
+D) **k-익명성·l-다양성 일반화** — `generalization/` 에 추가 알고리즘.
 
-**권장 순서:** B (평가셋) → C (사전 확장) → A (도메인 룰). 평가 인프라가 먼저
-있어야 사전·룰 변경이 정확도에 어떻게 작용하는지 측정 가능.
+**권장 순서:** A (실데이터 검증) → B (사전 확장) → C·D. 평가 인프라는 이미
+있으니 사용자 샘플만 들어오면 즉시 측정 가능.
 
 ## 8. 도메인 판단 대기 중인 항목 (사용자 입력 필요)
 
@@ -283,8 +285,9 @@ source .venv/bin/activate
 .venv/Scripts/activate
 pip install -e ".[dev]"
 pytest
-# 362 passed in ~0.3s 가 정상
+# 394 passed in ~0.4s 가 정상
 # CLI 사용: k-pii input.txt --mode STRICT --strategy tokenize --vault vault.json
+# 벤치마크: python -m k_pii.eval.benchmark -n 50 --seed 0
 ```
 
 **필요한 도구:** Python 3.10 이상. 코어는 표준 라이브러리만, dev는 pytest.

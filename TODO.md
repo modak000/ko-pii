@@ -51,12 +51,17 @@
 - [ ] 지명 사전 추가 — FP 방지 (현재 common_words 에 일부 포함)
 - [ ] 점수표의 가중치를 평가셋 기반으로 튜닝 (Phase 7 평가 후)
 
-## Phase 4 — 도메인 특화 룰
+## Phase 4 — 도메인 특화 룰 — ✅ 베이스라인 완료
 
-- [ ] `domain/government.py` — 결재서, 보고서, 회의록, 협조 공문 패턴
-- [ ] `domain/civil_petition.py` — 민원 신청·답변·정보공개 양식
-- [ ] `domain/hr.py` — 이력서, 인사 평가서, 인사 카드
-- [ ] `domain/medical.py` (선택) — KCD 진단코드, EDI 약품코드 사전
+- [x] `domain/government.py` — 정부 문서번호 (DOC_ID)
+- [x] `domain/civil_petition.py` — 민원/정보공개 번호 (PETITION_ID)
+- [x] `domain/hr.py` — 사번/공무원번호/교번 (EMPLOYEE_ID, 키워드 anchor)
+- [ ] `domain/medical.py` (선택) — KCD 진단코드, EDI 약품코드 사전 (사용자 도메인 입력 대기)
+
+**보강 TODO (Phase 4.1):**
+- [ ] 결재라인 (기안/검토/협조/결재) 라벨링 — person.py 점수 부스트 룰
+- [ ] 민원 양식 구조화 표 파싱 — 현재 평문 가정
+- [ ] 이력서 자유 텍스트의 재직기간/학교명 — 사용자 도메인 입력 필요
 
 ## Phase 5 — Vault + 처리 모드 + 일반화 ✅
 
@@ -75,13 +80,21 @@
 - [x] `reporting/certificate.py` — 처리 증명서 생성 (감사용)
 - [x] CLI (`k_pii/cli.py`) — `k-pii input.txt --mode strict --vault vault.json --strategy tokenize`
 
-## Phase 7 — 평가 & 문서화
+## Phase 7 — 평가 & 문서화 — ✅ 베이스라인 완료
 
-- [ ] 합성 공문서 생성기 (Faker ko_KR + 템플릿)
-- [ ] 정확도 벤치마크 — 카테고리별 Precision / Recall / F1
-- [ ] `docs/legal_mapping.md` — 모든 PII × 법조항 표
-- [ ] `docs/risk_levels.md` — 위험도 정의 및 사례
-- [ ] `docs/coverage.md` — 어떤 문서 유형 / PII 어디까지 커버하는지
+- [x] 합성 공문서 생성기 — `eval/synth.py` (Faker 불사용, 표준 라이브러리 random)
+  - 템플릿 4종: gov_decree, civil_petition, hr_review, meeting_minutes
+- [x] 정확도 벤치마크 — `eval/metrics.py` (Precision/Recall/F1, partial/strict 매칭)
+  - 50문서 × 4 seed 코퍼스에서 **micro F1 = 1.000** 달성
+  - CLI: `python -m k_pii.eval.benchmark -n 50 --seed 0`
+- [x] `docs/legal_mapping.md` — 모든 PII × 법조항 표
+- [x] `docs/risk_levels.md` — 위험도 정의 및 사례
+- [x] `docs/coverage.md` — 어떤 문서 유형 / PII 어디까지 커버하는지
+
+**보강 TODO (Phase 7.1):**
+- [ ] 실제 익명화된 공공 문서로 벤치마크 (사용자 샘플 필요)
+- [ ] 합성 템플릿 다양화 (보고서·협조공문·이력서 자유 텍스트)
+- [ ] 점수 임계값 튜닝 자동화 (grid search)
 
 ## 도메인 판단이 필요한 보류 항목
 

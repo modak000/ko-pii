@@ -2,8 +2,8 @@
 
 한국 공공 부문 문서를 위한 규칙 기반 개인정보(PII) 비식별 라이브러리.
 
-> **상태:** Phase 1·2·3·5·6 완료 (PII 18종 + Vault + 처리 모드 + Anonymizer + 리포팅 + CLI).
-> 다음 단계는 도메인 특화 룰(공문서/민원/인사) 와 평가·문서화 (Phase 4·7).
+> **상태:** Phase 1~7 베이스라인 완료 (PII 21종 + Vault + Anonymizer + 도메인 룰 + 평가·문서화).
+> 합성 코퍼스 50문서 × 4 seed 에서 **micro F1 = 1.000**.
 >
 > **AI 에이전트가 처음 이 레포에 합류한다면:** [CLAUDE.md](CLAUDE.md) 먼저 읽어주세요. 미션·설계 원칙·결정 기록·다음에 할 일이 모두 들어있습니다.
 
@@ -73,6 +73,19 @@
 - `reporting/{summary,certificate}.py` — 처리 요약 + 감사 증명서
 - `k-pii` CLI — `k-pii input.txt --mode STRICT --strategy tokenize --vault vault.json`
 
+### Phase 4 — 도메인 특화 룰 ✅ 베이스라인
+
+- `domain/government.py` — 정부 문서번호 (DOC_ID)
+- `domain/civil_petition.py` — 민원·정보공개 번호 (PETITION_ID)
+- `domain/hr.py` — 사번·공무원번호·교번 (EMPLOYEE_ID, 키워드 anchor)
+
+### Phase 7 — 평가 + 문서화 ✅ 베이스라인
+
+- `eval/synth.py` — 합성 공문서 생성기 (4 템플릿, Faker 불사용)
+- `eval/metrics.py` — Precision/Recall/F1 (partial/strict 매칭)
+- `eval/benchmark.py` — `python -m k_pii.eval.benchmark -n 50` 으로 즉시 평가
+- `docs/{legal_mapping,risk_levels,coverage}.md` — 법조항·위험도·커버리지 문서
+
 ## 빠른 시작
 
 ### 통합 API
@@ -113,7 +126,9 @@ python -m venv .venv
 .venv/Scripts/activate    # Windows
 pip install -e ".[dev]"
 pytest -v
-# 358 passed in ~0.3s
+# 394 passed in ~0.4s
+python -m k_pii.eval.benchmark -n 50 --seed 0
+# 합성 코퍼스에서 라벨별 P/R/F1 출력
 ```
 
 ## 라이선스

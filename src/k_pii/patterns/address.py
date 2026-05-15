@@ -23,19 +23,19 @@ LABEL = "ADDRESS"
 LEGAL_BASIS = "개인정보보호법 제2조"
 CATEGORY = "일반개인정보"
 
-# Optional 시/도/시/군/구 prefix + road token + building number
+# Optional 시·도 + 0~2 시·군·구 (성남시 분당구 같은 2단계) + road + 번지
 _PATTERN_ROAD = re.compile(
     r"(?:([가-힣]+(?:특별시|광역시|특별자치도|특별자치시|도))\s+)?"
-    r"(?:([가-힣]+(?:시|군|구))\s+)?"
+    r"((?:[가-힣]+(?:시|군|구)\s+){0,2})"
     r"([가-힣A-Za-z0-9]+(?:대로|로|길))"
     r"\s+"
     r"([0-9]+(?:-[0-9]+)?)"
 )
 
-# 지번 주소: 동/읍/면/리 + 번지수
+# 지번 주소: 동/읍/면/리 + 번지수 (0~2 시·군·구 허용)
 _PATTERN_JIBUN = re.compile(
     r"(?:([가-힣]+(?:특별시|광역시|특별자치도|특별자치시|도))\s+)?"
-    r"(?:([가-힣]+(?:시|군|구))\s+)?"
+    r"((?:[가-힣]+(?:시|군|구)\s+){0,2})"
     r"([가-힣]+(?:동|읍|면|리))"
     r"\s+"
     r"([0-9]+(?:-[0-9]+)?)"
@@ -57,8 +57,8 @@ def detect(text: str) -> Iterator[DetectionResult]:
 
     for m in _PATTERN_ROAD.finditer(text):
         city = m.group(1)
-        district = m.group(2)
-        anchor = _has_anchor(text, m.start(), city, district)
+        districts = (m.group(2) or "").strip()
+        anchor = _has_anchor(text, m.start(), city, districts)
         if anchor is None:
             continue
         span = (m.start(), m.end())
@@ -75,7 +75,7 @@ def detect(text: str) -> Iterator[DetectionResult]:
             extra={
                 "format": "road_name",
                 "city": city,
-                "district": district,
+                "districts": districts,
                 "road": m.group(3),
                 "building_number": m.group(4),
                 "category": CATEGORY,
@@ -87,8 +87,8 @@ def detect(text: str) -> Iterator[DetectionResult]:
         if any(span[0] < e and s < span[1] for s, e in seen):
             continue  # already claimed by road pattern
         city = m.group(1)
-        district = m.group(2)
-        anchor = _has_anchor(text, m.start(), city, district)
+        districts = (m.group(2) or "").strip()
+        anchor = _has_anchor(text, m.start(), city, districts)
         if anchor is None:
             continue
         seen.add(span)
@@ -104,7 +104,7 @@ def detect(text: str) -> Iterator[DetectionResult]:
             extra={
                 "format": "jibun",
                 "city": city,
-                "district": district,
+                "districts": districts,
                 "dong": m.group(3),
                 "lot_number": m.group(4),
                 "category": CATEGORY,

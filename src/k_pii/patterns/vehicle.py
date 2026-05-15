@@ -27,7 +27,7 @@ CATEGORY = "일반개인정보"
 _PATTERN = re.compile(
     r"(?<![0-9가-힣])"
     r"([0-9]{2,3})\s?([가-힣])\s?([0-9]{4})"
-    r"(?![0-9가-힣])"
+    r"(?![0-9])"  # allow Korean particles to follow ("12가3456의 차량")
 )
 
 

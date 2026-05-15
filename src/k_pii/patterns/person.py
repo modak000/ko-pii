@@ -39,6 +39,38 @@ _DETERMINISTIC_HINTS = re.compile(
     r"|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"  # email
 )
 
+# 한국어 동사/형용사 어미·연결형. 이름은 거의 이 형태로 끝나지 않음.
+_VERB_LIKE_SUFFIXES = (
+    "하다", "하고", "하여", "하지", "하니", "하면", "한다", "한", "할", "함",
+    "하기", "하는", "하신", "하시", "하셨", "하셔", "하게", "하며", "하면서",
+    "했다", "했고", "했지", "했음", "했으며",
+    "되다", "되고", "되어", "되지", "되니", "되면", "된다", "된", "될", "됨",
+    "되기", "되는", "되며", "되었",
+    "드린", "드리는", "드리고", "드립니다", "드린다", "드리며",
+)
+
+
+def _looks_like_verb_form(token: str) -> bool:
+    """Heuristic: True if ``token`` ends with a common Korean verb/adj ending."""
+    return any(token.endswith(s) for s in _VERB_LIKE_SUFFIXES)
+
+
+# 행정구역 접미사. "경기도", "성남시", "가평군" 등이 surname-starting 2~3자
+# 토큰으로 보이지만 사람 이름은 거의 이 형태로 끝나지 않는다. 단, 명시적
+# field-label-before 가 있으면 override (드물게라도 가능성을 보존).
+_ADMIN_UNIT_CHARS: frozenset[str] = frozenset(
+    {"시", "군", "구", "도", "읍", "면", "리"}
+)
+_STREET_SUFFIXES: tuple[str, ...] = ("대로", "로", "길")
+
+
+def _looks_like_admin_unit(raw: str) -> bool:
+    return len(raw) >= 2 and raw[-1] in _ADMIN_UNIT_CHARS
+
+
+def _looks_like_street_name(raw: str) -> bool:
+    return len(raw) >= 3 and any(raw.endswith(s) for s in _STREET_SUFFIXES)
+
 
 def detect(text: str) -> Iterator[DetectionResult]:
     """Yield PERSON detections.
@@ -64,6 +96,15 @@ def _detect_with_dict(
     # ------ Pass A
     for m in _CANDIDATE.finditer(text):
         raw = m.group(1)
+        label_before = _label_before(text, m.start())
+        # Reject raw tokens that match an agency in the dictionary, or look
+        # like an administrative-unit name (경기도, 성남시, 가평군) — unless
+        # a person-field label is right before.
+        if not label_before:
+            if (is_agency(raw)
+                    or _looks_like_admin_unit(raw)
+                    or _looks_like_street_name(raw)):
+                continue
         # Try stripping a trailing particle to get the bare name
         stem, particle = strip_trailing_particle(raw)
         if len(stem) < 2 or len(stem) > 4:
@@ -74,10 +115,13 @@ def _detect_with_dict(
         # title, agency) — those are infrastructure markers, not names.
         if is_field_label(stem) or is_title(stem) or is_agency(stem):
             continue
+        # Skip tokens that look like Korean verb/adjective conjugations.
+        if _looks_like_verb_form(stem):
+            continue
         # Heuristic: skip tokens without any leading surname unless the
         # field label is right before (we'll let the scorer decide).
         sp = surname_prefix_len(stem)
-        if sp == 0 and not _label_before(text, m.start()):
+        if sp == 0 and not label_before:
             continue
 
         cand_start = m.start()
