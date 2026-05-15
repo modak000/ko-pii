@@ -9,9 +9,9 @@
 - [x] **BUSINESS_REG** — 사업자번호 (10자리) + 국세청 가중합 체크섬
 - [x] **CORP_REG** — 법인번호 (13자리) + Luhn-like 체크섬, RRN과 충돌 시 RRN 우선
 - [x] **DRIVER_LICENSE** — 운전면허번호 (12자리) + 지방청 코드(11~28) 검증 (체크섬 미공개)
-- [ ] **PASSPORT** — 여권번호 (M/S/R + 8자리, 체크섬 없음)
-- [ ] **CARD** — 신용카드 번호 + Luhn 알고리즘 (BIN 사전으로 발급사 식별 선택)
-- [ ] **MEDICAL_INSURANCE** — 건강보험증 번호 (11자리)
+- [x] **PASSPORT** — 여권번호 (1-2자 prefix + 8자리, 체크섬 미공개; confidence 0.9)
+- [x] **CARD** — 신용카드 번호 + Luhn (13~19자리, 하이픈/스페이스 분리자 지원)
+- [x] **MEDICAL_INSURANCE** — 건강보험증 번호 (11자리, 키워드 25자 윈도우 컨텍스트)
 
 ## Phase 2 — 비검증 PII (정규식 + 사전)
 
