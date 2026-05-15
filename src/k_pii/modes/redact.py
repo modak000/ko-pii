@@ -35,6 +35,7 @@ _LABEL_TO_HANGUL: dict[str, str] = {
     "DOC_ID": "문서번호",
     "PETITION_ID": "민원번호",
     "EMPLOYEE_ID": "사번",
+    "PNU": "토지번호",
 }
 
 

@@ -38,6 +38,7 @@ LEGAL_BASIS_BY_LABEL: dict[str, str] = {
     "DOC_ID": "개인정보보호법 제2조",
     "PETITION_ID": "개인정보보호법 제2조; 민원처리에 관한 법률",
     "EMPLOYEE_ID": "개인정보보호법 제2조; 국가공무원법 제22조",
+    "PNU": "공간정보의 구축 및 관리 등에 관한 법률; 개인정보보호법 제2조",
 }
 
 CATEGORY_BY_LABEL: dict[str, str] = {
@@ -62,6 +63,7 @@ CATEGORY_BY_LABEL: dict[str, str] = {
     "DOC_ID": "참조정보",
     "PETITION_ID": "참조정보",
     "EMPLOYEE_ID": "일반개인정보",
+    "PNU": "참조정보",
 }
 
 _RISK_FLOOR_BY_LABEL: dict[str, RiskLevel] = {
@@ -86,6 +88,7 @@ _RISK_FLOOR_BY_LABEL: dict[str, RiskLevel] = {
     "DOC_ID": RiskLevel.LOW,
     "PETITION_ID": RiskLevel.LOW,
     "EMPLOYEE_ID": RiskLevel.MEDIUM,
+    "PNU": RiskLevel.LOW,
 }
 
 

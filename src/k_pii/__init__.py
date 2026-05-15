@@ -8,6 +8,11 @@ Public API
 - ``DetectionResult`` / ``RiskLevel`` — core data types.
 - ``tokenize`` / ``redact`` / ``hashed`` — substitution primitives.
 """
+from k_pii.analytics import (
+    AttributeClass, CombinedRiskReport,
+    classify_attribute, score_combined_risk,
+    KAnonymityReport, k_anonymity, evaluate_dataset,
+)
 from k_pii.anonymizer import Anonymizer, AnonymizationResult, DetectionRecord
 from k_pii.core.modes import Action, ProcessingMode
 from k_pii.core.types import DetectionResult, RiskLevel
@@ -17,7 +22,7 @@ from k_pii.modes.redact import redact
 from k_pii.modes.tokenize import tokenize
 from k_pii.vault.reversible import ReversibleVault, VaultEntry
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "Anonymizer",
@@ -33,5 +38,13 @@ __all__ = [
     "hashed",
     "ReversibleVault",
     "VaultEntry",
+    # analytics
+    "AttributeClass",
+    "CombinedRiskReport",
+    "classify_attribute",
+    "score_combined_risk",
+    "KAnonymityReport",
+    "k_anonymity",
+    "evaluate_dataset",
     "__version__",
 ]

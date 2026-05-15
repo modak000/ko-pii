@@ -2,7 +2,7 @@
 
 한국 공공 부문 문서를 위한 규칙 기반 개인정보(PII) 비식별 라이브러리.
 
-> **상태:** Phase 1~7 베이스라인 완료 (PII 21종 + Vault + Anonymizer + 도메인 룰 + 평가·문서화).
+> **상태:** Phase 1~8 완료 (PII 22종 + Vault + Anonymizer + 도메인 룰 + 평가 + 결합위험도/k-익명성).
 > 합성 코퍼스 6 템플릿 × 60문서 × 5 seed = **300문서에서 micro F1 = 1.000**.
 > 공개 데이터 기반 사전 (정부조직 약칭 규칙, 행정구역 표준코드, 공무원 직급 체계) 통합.
 >
@@ -89,10 +89,32 @@
 
 ### Phase 7 — 평가 + 문서화 ✅ 베이스라인
 
-- `eval/synth.py` — 합성 공문서 생성기 (4 템플릿, Faker 불사용)
+- `eval/synth.py` — 합성 공문서 생성기 (6 템플릿, Faker 불사용)
 - `eval/metrics.py` — Precision/Recall/F1 (partial/strict 매칭)
-- `eval/benchmark.py` — `python -m k_pii.eval.benchmark -n 50` 으로 즉시 평가
+- `eval/benchmark.py` — `python -m k_pii.eval.benchmark -n 60` 으로 즉시 평가
 - `docs/{legal_mapping,risk_levels,coverage}.md` — 법조항·위험도·커버리지 문서
+
+### Phase 8 — 결합 위험도 + k-익명성 ✅
+
+「개인정보 비식별 조치 가이드라인」 직접 대응:
+
+- `analytics/combined_risk.py` — 식별자/준식별자/민감속성 분류 + 조합 위험도
+  자동 계산. ``Anonymizer`` 결과의 `combined_risk` 에 자동 부착.
+- `analytics/k_anonymity.py` — k-익명성 평가 + 일반화 제안 (threshold 기본 5)
+- 추가 PII: **PNU** (필지고유번호 19자리, 결정적)
+
+```python
+from k_pii import Anonymizer, ProcessingMode, k_anonymity
+
+result = Anonymizer(mode=ProcessingMode.STRICT).process(text)
+print(result.combined_risk.combined_risk)       # → RiskLevel.CRITICAL
+print(result.combined_risk.rationale)            # → ["식별자 RRN 등장 → 즉시 식별 가능"]
+
+# 데이터셋 단위 k-익명성 평가
+records = [{"PERSON": "<PERSON_1>", "ADDRESS": "<ADDRESS_1>"} for _ in range(7)]
+report = k_anonymity(records, threshold=5)
+print(report.k, report.satisfies_threshold)      # → 7, True
+```
 
 ## 빠른 시작
 
@@ -134,7 +156,7 @@ python -m venv .venv
 .venv/Scripts/activate    # Windows
 pip install -e ".[dev]"
 pytest -v
-# 427 passed in ~0.4s
+# 462 passed in ~0.6s
 python -m k_pii.eval.benchmark -n 60 --seed 0
 # 합성 코퍼스에서 라벨별 P/R/F1 출력 (현재 모든 라벨 F1=1.000)
 ```

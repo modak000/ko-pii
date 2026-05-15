@@ -13,6 +13,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable, Optional
 
+from k_pii.analytics.combined_risk import (
+    CombinedRiskReport,
+    score_combined_risk,
+)
 from k_pii.core.modes import Action, ProcessingMode, policy_for
 from k_pii.core.types import DetectionResult, RiskLevel
 from k_pii.detect import detect_all
@@ -34,6 +38,7 @@ class AnonymizationResult:
     detections: list[DetectionRecord]
     vault: Optional[ReversibleVault]
     summary: dict = field(default_factory=dict)
+    combined_risk: Optional[CombinedRiskReport] = None
 
     def review_items(self) -> list[DetectionRecord]:
         return [r for r in self.detections if r.action == Action.REVIEW]
@@ -92,12 +97,14 @@ class Anonymizer:
 
         to_block = [r for r in decisions if r.action == Action.BLOCK]
         replaced = self._apply(text, to_block)
-        summary = self._build_summary(decisions)
+        combined = score_combined_risk(detections)
+        summary = self._build_summary(decisions, combined)
         return AnonymizationResult(
             text=replaced,
             detections=decisions,
             vault=self.vault if self.strategy in {"tokenize", "hashed"} else None,
             summary=summary,
+            combined_risk=combined,
         )
 
     # ----------------------------------------------------------- internal
@@ -151,7 +158,11 @@ class Anonymizer:
             return tok
         return apply_substitutions(text, (r.detection for r in to_block), repl)
 
-    def _build_summary(self, decisions: list[DetectionRecord]) -> dict:
+    def _build_summary(
+        self,
+        decisions: list[DetectionRecord],
+        combined: CombinedRiskReport,
+    ) -> dict:
         by_action: dict[str, int] = {}
         by_risk: dict[str, int] = {}
         by_label: dict[str, int] = {}
@@ -164,6 +175,11 @@ class Anonymizer:
             lb = r.detection.legal_basis or "—"
             by_legal[lb] = by_legal.get(lb, 0) + 1
         return {
+            "combined_risk": combined.combined_risk.name,
+            "combined_rationale": list(combined.rationale),
+            "distinct_identifiers": list(combined.distinct_identifiers),
+            "distinct_quasi_identifiers": list(combined.distinct_quasi),
+            "sensitive_attributes": list(combined.sensitive_present),
             "total": len(decisions),
             "mode": self.mode.value,
             "strategy": self.strategy,

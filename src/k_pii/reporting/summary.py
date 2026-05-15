@@ -23,6 +23,16 @@ def format_summary_text(result: AnonymizationResult) -> str:
     lines.append(f"치환 전략: {s.get('strategy')}")
     lines.append(f"총 검출: {s.get('total')} 건")
     lines.append("")
+    lines.append(f"[결합 위험도] {s.get('combined_risk', '—')}")
+    for r in s.get("combined_rationale", []):
+        lines.append(f"  · {r}")
+    if s.get("distinct_identifiers"):
+        lines.append(f"  식별자: {', '.join(s['distinct_identifiers'])}")
+    if s.get("distinct_quasi_identifiers"):
+        lines.append(f"  준식별자: {', '.join(s['distinct_quasi_identifiers'])}")
+    if s.get("sensitive_attributes"):
+        lines.append(f"  민감속성: {', '.join(s['sensitive_attributes'])}")
+    lines.append("")
     lines.append("[조치별 분포]")
     for action, n in sorted(s.get("by_action", {}).items()):
         lines.append(f"  - {action}: {n}")

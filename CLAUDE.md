@@ -233,10 +233,11 @@ emit.
 | 5. Vault + 모드 + 일반화 | ✅ 완료 | vault + 3 modes + 4 generalizations | JSON schema v1 |
 | 6. 법적 매핑 + 위험도 + 리포팅 | ✅ 완료 | Anonymizer + 5 modes + reporting + CLI | `k-pii` 엔트리포인트 |
 | 7. 평가 + 문서화 | ✅ 베이스라인 완료 | 합성기 + 메트릭 + 벤치마크 + docs/ | 합성 50×4seed F1=1.000 |
+| 8. 결합위험도 + k-익명성 | ✅ 완료 | analytics/ + PNU 추가 | 「비식별 조치 가이드라인」 대응 |
 
 **누적 수치:**
-- PII 카테고리 21종 (Phase 1·2 17종 + PERSON + DOC_ID + PETITION_ID + EMPLOYEE_ID)
-- 테스트 427개, ~0.4초 (Python 3.13)
+- PII 카테고리 22종 (Phase 1·2 17종 + PERSON + DOC_ID + PETITION_ID + EMPLOYEE_ID + PNU)
+- 테스트 462개, ~0.6초 (Python 3.13)
 - 코어 dependencies 0개
 - 합성 코퍼스 6템플릿×60×5seed (300문서) 에서 **micro F1 = 1.000**
 - 사전 데이터: 성씨 286, 부처/청 100+, 직급 200+, 행정구역 250+
