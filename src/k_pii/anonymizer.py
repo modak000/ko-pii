@@ -72,7 +72,8 @@ class Anonymizer:
         include: Optional[Iterable[str]] = None,
         exclude: Optional[Iterable[str]] = None,
     ):
-        if strategy not in {"tokenize", "redact", "asterisk", "hashed"}:
+        if strategy not in {"tokenize", "redact", "asterisk", "hashed",
+                            "partial", "fpe"}:
             raise ValueError(f"Unknown strategy: {strategy}")
         self.mode = mode
         self.policy = policy_for(mode)
@@ -102,7 +103,7 @@ class Anonymizer:
         return AnonymizationResult(
             text=replaced,
             detections=decisions,
-            vault=self.vault if self.strategy in {"tokenize", "hashed"} else None,
+            vault=self.vault if self.strategy in {"tokenize", "hashed", "fpe"} else None,
             summary=summary,
             combined_risk=combined,
         )
@@ -147,15 +148,47 @@ class Anonymizer:
                 text, (r.detection for r in to_block), repl
             )
 
-        # hashed
+        if self.strategy == "hashed":
+            def repl(d: DetectionResult) -> str:
+                fp = self.vault.fingerprint(d.label, d.text)
+                tok = f"<{d.label}:{fp[:12]}>"
+                for rec in to_block:
+                    if rec.detection is d:
+                        rec.token = tok
+                        break
+                return tok
+            return apply_substitutions(text, (r.detection for r in to_block), repl)
+
+        if self.strategy == "partial":
+            from k_pii.modes.partial import mask_value
+            def repl(d: DetectionResult) -> str:
+                masked = mask_value(d.label, d.text)
+                for rec in to_block:
+                    if rec.detection is d:
+                        rec.token = masked
+                        break
+                return masked
+            return apply_substitutions(text, (r.detection for r in to_block), repl)
+
+        # fpe
+        from k_pii.modes.fpe import _FPE_BY_LABEL, _fpe_default
         def repl(d: DetectionResult) -> str:
             fp = self.vault.fingerprint(d.label, d.text)
-            tok = f"<{d.label}:{fp[:12]}>"
+            fn = _FPE_BY_LABEL.get(d.label, _fpe_default)
+            new_val = fn(d.text, fp)
+            self.vault.store(
+                label=d.label,
+                original=d.text,
+                risk_level=int(d.risk_level),
+                legal_basis=d.legal_basis,
+                offset=d.start,
+                extra={**dict(d.extra), "fpe_value": new_val},
+            )
             for rec in to_block:
                 if rec.detection is d:
-                    rec.token = tok
+                    rec.token = new_val
                     break
-            return tok
+            return new_val
         return apply_substitutions(text, (r.detection for r in to_block), repl)
 
     def _build_summary(

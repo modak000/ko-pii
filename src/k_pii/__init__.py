@@ -17,7 +17,9 @@ from k_pii.anonymizer import Anonymizer, AnonymizationResult, DetectionRecord
 from k_pii.core.modes import Action, ProcessingMode
 from k_pii.core.types import DetectionResult, RiskLevel
 from k_pii.detect import detect_all
+from k_pii.modes.fpe import fpe
 from k_pii.modes.hashed import hashed
+from k_pii.modes.partial import partial, mask_value
 from k_pii.modes.redact import redact
 from k_pii.modes.tokenize import tokenize
 from k_pii.vault.reversible import ReversibleVault, VaultEntry
@@ -36,6 +38,9 @@ __all__ = [
     "tokenize",
     "redact",
     "hashed",
+    "partial",
+    "mask_value",
+    "fpe",
     "ReversibleVault",
     "VaultEntry",
     # analytics

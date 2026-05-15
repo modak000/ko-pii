@@ -1,0 +1,163 @@
+"""부분 마스킹 (Partial Redaction) — 공문서 표준 양식 호환.
+
+실제 한국 공문서는 PII 의 일부만 마스킹하는 경우가 많다:
+  - 성명:    "홍길동" → "홍OO" (성만 노출)
+  - 주민번호: "880101-1234568" → "880101-1******" (앞 6자리만 노출)
+  - 전화:    "010-1234-5678" → "010-****-5678" (양 끝만 노출)
+  - 이메일:  "user@example.com" → "u***@example.com"
+  - 카드:    "1234-5678-9012-3456" → "1234-****-****-3456"
+  - 주소:    "서울특별시 강남구 ..." → "서울특별시 강남구 ***"
+
+각 카테고리별 표준 마스킹 룰을 ``partial`` 함수에 제공한다.
+
+Legal basis: 「개인정보 비식별 조치 가이드라인」 (개인정보보호위원회) —
+"부분 마스킹은 비식별 조치의 *부분 일반화* 형태로 인정".
+"""
+from __future__ import annotations
+
+import re
+from typing import Callable, Iterable
+
+from k_pii.core.types import DetectionResult
+from k_pii.modes._apply import apply_substitutions
+
+MASK = "*"
+
+
+def _mask_rrn(text: str) -> str:
+    """``880101-1234568`` → ``880101-1******`` (생년 + gender 만 노출)."""
+    digits = re.sub(r"\D", "", text)
+    if len(digits) != 13:
+        return MASK * len(text)
+    has_hyphen = "-" in text
+    front = digits[:6]
+    gender = digits[6]
+    masked_back = MASK * 6
+    return f"{front}-{gender}{masked_back}" if has_hyphen else f"{front}{gender}{masked_back}"
+
+
+def _mask_phone(text: str) -> str:
+    """``010-1234-5678`` → ``010-****-5678`` (앞 3 + 뒤 4 노출)."""
+    digits = re.sub(r"\D", "", text)
+    if len(digits) < 7:
+        return MASK * len(text)
+    # Preserve separators
+    sep = "-" if "-" in text else (" " if " " in text else "")
+    if len(digits) >= 11:
+        return f"{digits[:3]}{sep}{MASK*4}{sep}{digits[-4:]}"
+    if len(digits) == 10:
+        return f"{digits[:3]}{sep}{MASK*3}{sep}{digits[-4:]}"
+    if len(digits) == 9:
+        return f"{digits[:2]}{sep}{MASK*3}{sep}{digits[-4:]}"
+    return MASK * len(text)
+
+
+def _mask_email(text: str) -> str:
+    """``user@example.com`` → ``u***@example.com`` (로컬 앞자만 노출)."""
+    if "@" not in text:
+        return MASK * len(text)
+    local, _, domain = text.partition("@")
+    if not local:
+        return text
+    if len(local) <= 1:
+        return f"{local}{MASK*3}@{domain}"
+    return f"{local[0]}{MASK*max(3, len(local)-1)}@{domain}"
+
+
+def _mask_card(text: str) -> str:
+    """``1234-5678-9012-3456`` → ``1234-****-****-3456`` (BIN + 마지막 4)."""
+    digits = re.sub(r"\D", "", text)
+    if len(digits) < 8:
+        return MASK * len(text)
+    # 길이 보존하면서 중간만 가림
+    has_hyphen = "-" in text
+    has_space = " " in text
+    sep = "-" if has_hyphen else (" " if has_space else "")
+    front = digits[:4]
+    back = digits[-4:]
+    middle_len = len(digits) - 8
+    if sep:
+        # 4자리 그룹 형태로 재조합
+        groups = [front]
+        i = 4
+        while i < len(digits) - 4:
+            groups.append(MASK * min(4, len(digits) - 4 - i))
+            i += 4
+        groups.append(back)
+        return sep.join(groups)
+    return f"{front}{MASK*middle_len}{back}"
+
+
+def _mask_name(text: str) -> str:
+    """``홍길동`` → ``홍OO`` (성만 노출, 이름은 한국 표준 O 로 마스킹)."""
+    from k_pii.dictionaries.surnames import surname_prefix_len
+    sp = surname_prefix_len(text)
+    if sp == 0:
+        sp = 1  # 폴백: 첫 글자만 노출
+    if len(text) <= sp:
+        return text
+    return text[:sp] + ("O" * (len(text) - sp))
+
+
+def _mask_address(text: str) -> str:
+    """주소: 시·도/시·군·구까지만 노출, 도로명 이하 마스킹."""
+    from k_pii.generalization.address import generalize_address
+    g = generalize_address(text, level="district")
+    return g + " " + MASK * 3 if g != text else MASK * len(text)
+
+
+def _mask_account(text: str) -> str:
+    """계좌: 앞 4 + 끝 4 노출, 중간 마스킹."""
+    digits = re.sub(r"\D", "", text)
+    if len(digits) < 8:
+        return MASK * len(text)
+    return f"{digits[:4]}{MASK*(len(digits)-8)}{digits[-4:]}"
+
+
+def _mask_passport(text: str) -> str:
+    """여권: prefix + 마지막 2자리 노출."""
+    m = re.match(r"^([A-Z]{1,2})(\d+)$", text)
+    if not m:
+        return MASK * len(text)
+    prefix, digits = m.group(1), m.group(2)
+    return f"{prefix}{MASK*(len(digits)-2)}{digits[-2:]}"
+
+
+def _mask_default(text: str) -> str:
+    """기본: 전체 마스킹 (가능하면 양 끝 2자리는 노출)."""
+    if len(text) <= 4:
+        return MASK * len(text)
+    return text[:2] + MASK * (len(text) - 4) + text[-2:]
+
+
+_MASKERS: dict[str, Callable[[str], str]] = {
+    "RRN": _mask_rrn,
+    "FRN": _mask_rrn,
+    "PHONE": _mask_phone,
+    "FAX": _mask_phone,
+    "EMAIL": _mask_email,
+    "CARD": _mask_card,
+    "PERSON": _mask_name,
+    "ADDRESS": _mask_address,
+    "ACCOUNT": _mask_account,
+    "PASSPORT": _mask_passport,
+}
+
+
+def partial(
+    text: str,
+    detections: Iterable[DetectionResult],
+) -> str:
+    """Apply category-aware partial masking to each detection span."""
+
+    def replace(d: DetectionResult) -> str:
+        masker = _MASKERS.get(d.label, _mask_default)
+        return masker(d.text)
+
+    return apply_substitutions(text, detections, replace)
+
+
+def mask_value(label: str, value: str) -> str:
+    """Stand-alone helper: ``mask_value("RRN", "880101-1234568")`` → ``880101-1******``."""
+    masker = _MASKERS.get(label, _mask_default)
+    return masker(value)

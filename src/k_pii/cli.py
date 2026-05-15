@@ -34,7 +34,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "-s", "--strategy",
-        choices=["tokenize", "redact", "asterisk", "hashed"],
+        choices=["tokenize", "redact", "asterisk", "hashed", "partial", "fpe"],
         default="tokenize",
         help="Substitution strategy (default: tokenize).",
     )
@@ -74,8 +74,9 @@ def _build_parser() -> argparse.ArgumentParser:
 def _read_input(path: str) -> str:
     if path == "-":
         return sys.stdin.read()
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
+    # 확장자 기반 자동 디스패처 (HWPX/DOCX/XLSX/CSV/TXT 등)
+    from k_pii.io_ import read_text
+    return read_text(path)
 
 
 def _write_output(path: Optional[str], text: str) -> None:

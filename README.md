@@ -2,9 +2,10 @@
 
 한국 공공 부문 문서를 위한 규칙 기반 개인정보(PII) 비식별 라이브러리.
 
-> **상태:** Phase 1~8 완료 (PII 22종 + Vault + Anonymizer + 도메인 룰 + 평가 + 결합위험도/k-익명성).
-> 합성 코퍼스 6 템플릿 × 60문서 × 5 seed = **300문서에서 micro F1 = 1.000**.
+> **상태:** Phase 1~9 완료 (PII 25종 + Vault + 6 처리 전략 + 도메인 룰 + 평가 + 결합위험도/k-익명성 + 파일 입력 + FPE).
+> 합성 코퍼스 6 템플릿 × 60문서 × 8 seed = **480문서에서 micro F1 = 1.000**.
 > 공개 데이터 기반 사전 (정부조직 약칭 규칙, 행정구역 표준코드, 공무원 직급 체계) 통합.
+> HWPX·DOCX·XLSX·CSV·TXT 모두 표준 라이브러리만으로 직접 처리.
 >
 > **AI 에이전트가 처음 이 레포에 합류한다면:** [CLAUDE.md](CLAUDE.md) 먼저 읽어주세요. 미션·설계 원칙·결정 기록·다음에 할 일이 모두 들어있습니다.
 
@@ -94,6 +95,25 @@
 - `eval/benchmark.py` — `python -m k_pii.eval.benchmark -n 60` 으로 즉시 평가
 - `docs/{legal_mapping,risk_levels,coverage}.md` — 법조항·위험도·커버리지 문서
 
+### Phase 9 — 파일 입력 + 부분 마스킹/FPE + 식의약·법조 도메인 ✅
+
+**파일 입력 (io_/ — 표준 라이브러리만):**
+- `.hwpx` (한컴 OWPML), `.docx`, `.xlsx`, `.csv`/`.tsv`, `.txt`/`.md`
+- 확장자 자동 디스패처: `from k_pii.io_ import read_text`
+
+**처리 전략 확장 (6종):**
+- `tokenize` — `<RRN_1>` 가역 토큰
+- `redact` — `[주민등록번호]` 비가역 라벨
+- `asterisk` — `**************` 길이 보존
+- `hashed` — `<RRN:abc123>` 단방향 해시
+- **`partial`** — `880101-1******` / `홍OO` / `010-****-5678` 등 부분 마스킹 (실무 공문서 양식)
+- **`fpe`** — `880101-1234568` → `771202-2345671` 형식 보존 (자릿수·하이픈·체크섬 일관성)
+
+**식의약·법조 도메인 추가 PII:**
+- `KCD` — 한국표준질병사인분류 (`E11.9`, `I10` 등) — 민감속성
+- `EDI_DRUG` — 식약처 의약품 표준코드 (9/13자리)
+- `COURT_CASE` — 법원 사건번호 (`2024가합12345`)
+
 ### Phase 8 — 결합 위험도 + k-익명성 ✅
 
 「개인정보 비식별 조치 가이드라인」 직접 대응:
@@ -156,9 +176,14 @@ python -m venv .venv
 .venv/Scripts/activate    # Windows
 pip install -e ".[dev]"
 pytest -v
-# 462 passed in ~0.6s
+# 545 passed in ~0.6s
 python -m k_pii.eval.benchmark -n 60 --seed 0
 # 합성 코퍼스에서 라벨별 P/R/F1 출력 (현재 모든 라벨 F1=1.000)
+
+# 파일 입력
+k-pii input.hwpx --mode STRICT --strategy partial -o anon.txt
+k-pii data.csv --strategy fpe --vault vault.json
+k-pii report.docx --strategy tokenize --report cert.txt
 ```
 
 ## 라이선스
