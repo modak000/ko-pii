@@ -67,12 +67,19 @@ class ReversibleVault:
     if the same ``salt`` is reused.
     """
 
-    def __init__(self, salt: Optional[str] = None):
+    def __init__(self, salt: Optional[str] = None, audit_log=None):
+        """``audit_log``: optional :class:`AuditLog` for compliance tracking.
+
+        When provided, every ``store()`` and ``reveal()`` call is appended to
+        the log — directly answering 개인정보보호법 제29조 안전조치의무 의
+        처리 이력 요건.
+        """
         self.salt: str = salt if salt is not None else _random_salt()
         self.created_at: str = datetime.now(timezone.utc).isoformat()
         self._entries: dict[str, VaultEntry] = {}
         self._reverse: dict[tuple[str, str], str] = {}  # (label, original) -> token
         self._counters: dict[str, int] = {}             # label -> next id
+        self._audit = audit_log
 
     # ------------------------------------------------------------------ token
 
@@ -99,7 +106,8 @@ class ReversibleVault:
         """Insert or update an entry; return the assigned token."""
         token = self.token_for(label, original)
         entry = self._entries.get(token)
-        if entry is None:
+        is_new = entry is None
+        if is_new:
             entry = VaultEntry(
                 token=token,
                 label=label,
@@ -114,14 +122,32 @@ class ReversibleVault:
         else:
             if offset >= 0:
                 entry.occurrences.append(offset)
+        if self._audit is not None and is_new:
+            try:
+                self._audit.record_store(token, label)
+            except Exception:
+                pass  # audit failure never blocks data flow
         return token
 
     # ---------------------------------------------------------------- lookup
 
-    def reveal(self, token: str) -> Optional[str]:
-        """Return the original value for a token, or None if unknown."""
+    def reveal(self, token: str, *, context: Optional[str] = None) -> Optional[str]:
+        """Return the original value for a token, or None if unknown.
+
+        ``context`` (optional) is recorded in the audit log — use it to attach
+        a reason ("export to BI dashboard", "user request id=42", etc.).
+        """
         entry = self._entries.get(token)
+        if self._audit is not None and entry is not None:
+            try:
+                self._audit.record_reveal(token, entry.label, context=context)
+            except Exception:
+                pass
         return entry.original if entry is not None else None
+
+    def attach_audit(self, audit_log) -> None:
+        """Attach (or replace) an :class:`AuditLog` after construction."""
+        self._audit = audit_log
 
     def get(self, token: str) -> Optional[VaultEntry]:
         return self._entries.get(token)

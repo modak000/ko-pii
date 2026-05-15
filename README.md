@@ -2,10 +2,10 @@
 
 한국 공공 부문 문서를 위한 규칙 기반 개인정보(PII) 비식별 라이브러리.
 
-> **상태:** Phase 1~9 완료 (PII 25종 + Vault + 6 처리 전략 + 도메인 룰 + 평가 + 결합위험도/k-익명성 + 파일 입력 + FPE).
-> 합성 코퍼스 6 템플릿 × 60문서 × 8 seed = **480문서에서 micro F1 = 1.000**.
-> 공개 데이터 기반 사전 (정부조직 약칭 규칙, 행정구역 표준코드, 공무원 직급 체계) 통합.
-> HWPX·DOCX·XLSX·CSV·TXT 모두 표준 라이브러리만으로 직접 처리.
+> **상태:** Phase 1~10 완료 — "베이스라인" → **"솔루션"** 수준.
+> 25 PII + 6 처리 전략 + HWP/PDF/표 입력 + Vault 암호화 + 감사 로그 + 배치 + 검토 큐 + HTML 리포트 + 한자/로마자.
+> 합성 코퍼스 480문서 micro F1 = 1.000 (실데이터 검증은 별도 트랙).
+> 코어 deps 0개. 입력·보안 기능은 ``[file]`` / ``[security]`` extras 로 분리.
 >
 > **AI 에이전트가 처음 이 레포에 합류한다면:** [CLAUDE.md](CLAUDE.md) 먼저 읽어주세요. 미션·설계 원칙·결정 기록·다음에 할 일이 모두 들어있습니다.
 
@@ -95,6 +95,33 @@
 - `eval/benchmark.py` — `python -m k_pii.eval.benchmark -n 60` 으로 즉시 평가
 - `docs/{legal_mapping,risk_levels,coverage}.md` — 법조항·위험도·커버리지 문서
 
+### Phase 10 — 솔루션 인프라 ✅
+
+**입력 호환성:**
+- `.hwp` (한컴 5.x OLE — `olefile` 외부 deps) + 기존 `.hwpx`
+- `.pdf` (텍스트 레이어 — `pypdf` 외부 deps)
+- **표 컬럼-단위 처리** — `k_pii.tabular.anonymize_records()` — CSV/XLSX 헤더
+  자동 매핑 (성명→PERSON, 주민번호→RRN 등 80+ 헤더 변형)
+
+**보안 (개인정보보호법 제29조 안전조치의무):**
+- **Vault 암호화** — AES-256-GCM + PBKDF2 (480k iter). `cryptography` 외부 deps
+- **감사 로그** — 모든 `vault.reveal()` / `store()` 호출 JSONL 기록
+- CLI: `--vault-password` 또는 환경변수 `$KPII_VAULT_PASSWORD`, `--audit-log`
+
+**배치 처리:**
+- 디렉토리·glob 일괄 처리 (`k-pii ./docs/ --batch --workers 4`)
+- 진행률·실패 보고 + 부분 성공 처리
+
+**사람 검토 워크플로우:**
+- **검토 큐** (`k_pii.review`) — REVIEW 항목 영구 저장 + OK/FP/FN 마킹
+- **피드백 학습** — FP 마킹 누적 → `common_words` 자동 추천 (수동 반영)
+- **HTML 리포트** — 단일 파일, 색상 코딩 + 인터랙티브 마킹 다운로드
+
+**표기 변형 매칭:**
+- 한자 → 한글 (`hanja_to_hangul("洪吉童")` → `"홍길동"`)
+- Revised Romanization (`romanize_name("홍길동")` → `"Hong Gildong"`)
+- 변형 후보 8종 자동 생성 (성-이름 분리, 하이픈, 대소문자 등)
+
 ### Phase 9 — 파일 입력 + 부분 마스킹/FPE + 식의약·법조 도메인 ✅
 
 **파일 입력 (io_/ — 표준 라이브러리만):**
@@ -174,16 +201,23 @@ for result in detect("신청인 880101-1234568"):
 ```bash
 python -m venv .venv
 .venv/Scripts/activate    # Windows
-pip install -e ".[dev]"
+pip install -e ".[dev,file,security]"
 pytest -v
-# 545 passed in ~0.6s
+# 597 passed in ~1.8s
 python -m k_pii.eval.benchmark -n 60 --seed 0
 # 합성 코퍼스에서 라벨별 P/R/F1 출력 (현재 모든 라벨 F1=1.000)
 
-# 파일 입력
+# 단일 파일 (HWPX/HWP/PDF/DOCX/XLSX/CSV/TXT 자동 처리)
 k-pii input.hwpx --mode STRICT --strategy partial -o anon.txt
 k-pii data.csv --strategy fpe --vault vault.json
 k-pii report.docx --strategy tokenize --report cert.txt
+
+# 배치 처리 (디렉토리 일괄)
+k-pii ./incoming/ --batch --workers 4 --output-dir ./anon/
+
+# 암호화 vault + 감사 로그
+KPII_VAULT_PASSWORD=secret \
+  k-pii input.hwp --vault vault.kvault --audit-log audit.jsonl
 ```
 
 ## 라이선스

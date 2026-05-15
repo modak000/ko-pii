@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "k-pii"
-version = "0.2.0"
+version = "0.4.0"
 description = "Rule-based PII detection and reversible pseudonymization for Korean public-sector documents"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
@@ -13,6 +13,15 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "pytest-cov>=4.0"]
+# 입력 포맷 — 한국 공공 문서 (HWP 5.x, PDF)
+file = ["olefile>=0.46", "pypdf>=3.0"]
+# 보안 — Vault 암호화 (AES-GCM)
+security = ["cryptography>=41.0"]
+# 모든 옵션
+all = [
+    "olefile>=0.46", "pypdf>=3.0",
+    "cryptography>=41.0",
+]
 
 [project.scripts]
 k-pii = "k_pii.cli:main"

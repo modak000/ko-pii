@@ -8,17 +8,28 @@ from k_pii.io_ import csv_reader, docx, hwpx, plain, xlsx
 SUPPORTED_EXTENSIONS: tuple[str, ...] = (
     ".txt", ".md", ".log",
     ".csv", ".tsv",
-    ".hwpx",
+    ".hwpx", ".hwp",     # 한컴 (신/구)
     ".docx",
     ".xlsx",
+    ".pdf",
 )
 
 
 def read_text(path: str) -> str:
-    """파일 확장자에 따라 적절한 reader 로 텍스트를 반환."""
+    """파일 확장자에 따라 적절한 reader 로 텍스트를 반환.
+
+    HWP 5.x / PDF 는 optional extras (``pip install k-pii[file]``) 가 필요할 수
+    있으며, 미설치 시 명시적 ImportError 를 발생시킨다.
+    """
     ext = os.path.splitext(path)[1].lower()
     if ext == ".hwpx":
         return hwpx.read_text(path)
+    if ext == ".hwp":
+        from k_pii.io_ import hwp
+        return hwp.read_text(path)
+    if ext == ".pdf":
+        from k_pii.io_ import pdf
+        return pdf.read_text(path)
     if ext == ".docx":
         return docx.read_text(path)
     if ext == ".xlsx":
