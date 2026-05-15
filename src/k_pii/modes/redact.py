@@ -23,6 +23,7 @@ _LABEL_TO_HANGUL: dict[str, str] = {
     "CARD": "카드번호",
     "MEDICAL_INSURANCE": "건강보험증번호",
     "PHONE": "전화번호",
+    "FAX": "팩스번호",
     "EMAIL": "이메일",
     "POSTAL_CODE": "우편번호",
     "IP": "IP",

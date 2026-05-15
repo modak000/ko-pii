@@ -1,0 +1,153 @@
+"""성명 (Korean person name) 컨텍스트 기반 검출 — Phase 3.
+
+전체 파이프라인:
+  1. 결정적 PII (RRN/PHONE/EMAIL/MEDICAL_INSURANCE) 위치를 별도 패스에서
+     식별해 두고, 그 근방을 "deterministic_nearby" 플래그로 표시.
+  2. 후보 추출: 2~4글자 한글 토큰 + 성씨 시작.
+  3. 컨텍스트 점수 (`context.context_rules.score_candidate`) 로 평가.
+  4. 임계값 이상이면 emit + 누적 사전 등록.
+  5. 누적 사전 보유 이름은 약한 단서로 등장해도 두 번째 패스에서 emit.
+
+Legal basis: 개인정보보호법 제2조 (성명을 통한 개인 식별).
+"""
+from __future__ import annotations
+
+import re
+from typing import Iterable, Iterator
+
+from k_pii.context.context_rules import NameCandidate, score_candidate
+from k_pii.context.name_dictionary import NameDictionary
+from k_pii.context.particles import strip_trailing_particle
+from k_pii.core.types import DetectionResult, RiskLevel
+from k_pii.dictionaries.agencies import is_agency
+from k_pii.dictionaries.common_words import is_common_word
+from k_pii.dictionaries.field_labels import is_field_label
+from k_pii.dictionaries.surnames import surname_prefix_len
+from k_pii.dictionaries.titles import is_title
+
+LABEL = "PERSON"
+LEGAL_BASIS = "개인정보보호법 제2조"
+CATEGORY = "일반개인정보"
+
+# 이름 후보: 한글 2~4글자 (조사 포함하면 더 길어질 수 있음)
+_CANDIDATE = re.compile(r"(?<![가-힣])([가-힣]{2,6})(?![가-힣])")
+
+# 결정적 PII 의 *위치 마커* 만 빠르게 찾기 위한 보조 패턴 (성능)
+_DETERMINISTIC_HINTS = re.compile(
+    r"\b\d{6}-?\d{7}\b"            # RRN/FRN
+    r"|01[01679][-\.\s]?\d{3,4}[-\.\s]?\d{4}"  # mobile
+    r"|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"  # email
+)
+
+
+def detect(text: str) -> Iterator[DetectionResult]:
+    """Yield PERSON detections.
+
+    Two-pass strategy:
+      Pass A: extract candidates, score them, emit those above threshold,
+              and register into a per-document NameDictionary.
+      Pass B: rescan candidates that were below threshold; if the (stem) is
+              now in the dictionary, emit with boosted confidence.
+    """
+    yield from _detect_with_dict(text, NameDictionary())
+
+
+def _detect_with_dict(
+    text: str, name_dict: NameDictionary
+) -> Iterator[DetectionResult]:
+    deterministic_spans = [
+        (m.start(), m.end()) for m in _DETERMINISTIC_HINTS.finditer(text)
+    ]
+    threshold = 0.50
+
+    pending: list[tuple[NameCandidate, float, list[str], str | None]] = []
+    # ------ Pass A
+    for m in _CANDIDATE.finditer(text):
+        raw = m.group(1)
+        # Try stripping a trailing particle to get the bare name
+        stem, particle = strip_trailing_particle(raw)
+        if len(stem) < 2 or len(stem) > 4:
+            continue
+        if is_common_word(stem):
+            continue
+        # Skip tokens that are themselves dictionary words (field label,
+        # title, agency) — those are infrastructure markers, not names.
+        if is_field_label(stem) or is_title(stem) or is_agency(stem):
+            continue
+        # Heuristic: skip tokens without any leading surname unless the
+        # field label is right before (we'll let the scorer decide).
+        sp = surname_prefix_len(stem)
+        if sp == 0 and not _label_before(text, m.start()):
+            continue
+
+        cand_start = m.start()
+        cand_end = m.start() + len(stem)
+        cand = NameCandidate(name=stem, start=cand_start, end=cand_end)
+        det_nearby = _is_within(deterministic_spans, cand_start, window=25)
+        score = score_candidate(
+            text, cand,
+            deterministic_nearby=det_nearby,
+            name_dictionary_boost=name_dict.boost_for(stem),
+        )
+        if score.value >= threshold:
+            name_dict.add(
+                stem, score.value, (cand_start, cand_end), score.evidence
+            )
+            yield _emit(cand, particle, score.value, score.evidence)
+        else:
+            pending.append((cand, score.value, score.evidence, particle))
+
+    # ------ Pass B: re-score pending using the now-populated dictionary
+    for cand, _score_a, ev_a, particle in pending:
+        boost = name_dict.boost_for(cand.name)
+        if boost <= 0:
+            continue
+        rescored = score_candidate(
+            text, cand,
+            deterministic_nearby=_is_within(
+                deterministic_spans, cand.start, window=25
+            ),
+            name_dictionary_boost=boost,
+        )
+        if rescored.value >= threshold:
+            yield _emit(cand, particle, rescored.value, rescored.evidence)
+
+
+def _label_before(text: str, start: int) -> bool:
+    head = text[max(0, start - 10): start]
+    return any(lbl in head for lbl in (
+        "성명", "이름", "성함", "신청인", "신청자", "민원인",
+        "기안자", "결재자", "보호자", "대리인", "참석자",
+        "당사자", "원고", "피고", "환자", "수신자",
+    ))
+
+
+def _is_within(
+    spans: Iterable[tuple[int, int]], pos: int, window: int = 25
+) -> bool:
+    for s, e in spans:
+        if abs(s - pos) <= window or abs(e - pos) <= window:
+            return True
+    return False
+
+
+def _emit(
+    cand: NameCandidate,
+    particle: str | None,
+    score: float,
+    evidence: list[str],
+) -> DetectionResult:
+    return DetectionResult(
+        label=LABEL,
+        text=cand.name,
+        start=cand.start,
+        end=cand.end,
+        risk_level=RiskLevel.HIGH,
+        confidence=score,
+        evidence=evidence,
+        legal_basis=LEGAL_BASIS,
+        extra={
+            "category": CATEGORY,
+            "particle": particle,
+        },
+    )

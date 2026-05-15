@@ -23,29 +23,33 @@
 - [x] **URL** — http(s) (INFO 수준)
 - [x] **ADDRESS** — 도로명 (시·도/구·군 prefix 또는 "주소" anchor) 베이스라인
 - [x] **ACCOUNT** — "계좌" 키워드 anchor (10~16자리) 베이스라인
-- [ ] **IPv6** — IPv4 이후 추가
-- [ ] **PHONE 국제 형식** — +82 / 0082 prefix 지원
-- [ ] **ADDRESS 지번** — 동·읍·면·리 + 번지 형식
+- [x] **IPv6** — RFC 4291 (단축/IPv4-mapped 포함, ipaddress 표준 라이브러리 검증)
+- [x] **PHONE 국제 형식** — +82 / 0082 prefix 지원
+- [x] **ADDRESS 지번** — 동·읍·면·리 + 번지 형식
 - [ ] **ADDRESS 행정구역 사전 통합** — 행안부 표준 데이터로 정확도 향상
 - [ ] **ACCOUNT 은행별 포맷 검증** — KB/우리/신한/농협/하나/카카오/토스 등
-- [ ] **FAX** — 팩스번호 (전화와 분리)
+- [x] **FAX** — 팩스번호 (키워드 anchor: 팩스/FAX/전송)
 
-## Phase 3 — 컨텍스트 기반 이름 탐지 (핵심)
+## Phase 3 — 컨텍스트 기반 이름 탐지 (핵심) — ✅ 베이스라인 완료
 
-- [ ] 사전 구축
-  - [ ] 한국 성씨 286개
-  - [ ] 일반 직책·호칭 (100+)
-  - [ ] 공무원 직책 (200+)
-  - [ ] 부처·기관·청 (500+)
-  - [ ] 공문서 필드 라벨 ("성명:", "신청인", "기안" 등 50+)
-  - [ ] 행정구역 (시·도·구·군·동)
-  - [ ] 일반 단어 사전 — FP 방지 (1000+)
-  - [ ] 지명 사전 — FP 방지
-- [ ] 한국어 조사 처리 (이/가/은/는/을/를/에/에게/한테/께서/의)
-- [ ] 이름 후보 추출 (한국어 2~4글자 + 성씨 매칭)
-- [ ] 컨텍스트 점수 시스템 — 직책 인접, 필드 라벨, 결정적 PII 인접, 조사 단서, FP 부정 단서 등
-- [ ] 누적 사전 `NameDictionary` — 문서 내 첫 확정 → 이후 등장 부스트
-- [ ] 통합 처리 흐름: 결정적 PII → 컨텍스트 시드 → 본문 스캔 → 사전 재스캔
+- [x] 사전 구축 (시드 — 사용자 도메인 큐레이션 필요)
+  - [x] 한국 성씨 140+ (합성성씨 포함)
+  - [x] 일반 직책·호칭 + 공무원 직책 (`titles.py`, `titles_gov`)
+  - [x] 부처·기관·청·지자체 (`agencies.py`)
+  - [x] 공문서 필드 라벨 (`field_labels.py`)
+  - [x] 일반 단어 사전 — FP 방지 (`common_words.py` 시드)
+- [x] 한국어 조사 처리 (`context/particles.py`)
+- [x] 이름 후보 추출 (한국어 2~4글자 + 성씨 매칭)
+- [x] 컨텍스트 점수 시스템 — 직책 인접/필드 라벨/결정적 PII 인접/조사 단서/FP 부정 단서/누적 사전 부스트
+- [x] 누적 사전 `NameDictionary` — 문서 내 첫 확정 → 이후 등장 부스트
+- [x] 통합 처리 흐름: 결정적 PII 위치 마커 → 점수 계산 → Pass A 시드 → Pass B 재스캔
+
+**보강 TODO (Phase 3.1):**
+- [ ] 성씨 사전 286개 풀로 확장 (현재 140+ 시드)
+- [ ] 공무원 직책 사전 부처·직급별 세분화 (사용자 도메인 입력 필요)
+- [ ] 공문서 필드 라벨 사전 큐레이션 (실무 샘플 기반)
+- [ ] 지명 사전 추가 — FP 방지 (현재 common_words 에 일부 포함)
+- [ ] 점수표의 가중치를 평가셋 기반으로 튜닝 (Phase 7 평가 후)
 
 ## Phase 4 — 도메인 특화 룰
 
@@ -54,22 +58,22 @@
 - [ ] `domain/hr.py` — 이력서, 인사 평가서, 인사 카드
 - [ ] `domain/medical.py` (선택) — KCD 진단코드, EDI 약품코드 사전
 
-## Phase 5 — Vault + 처리 모드 + 일반화
+## Phase 5 — Vault + 처리 모드 + 일반화 ✅
 
-- [ ] `vault/reversible.py` — `ReversibleVault`, `VaultEntry` (JSON 스키마 v1)
-- [ ] `modes/tokenize.py` — 가역 가명화 (`<PERSON_1>`, `<RRN_1>` 등 토큰)
-- [ ] `modes/redact.py` — 비가역 마스킹 (`[성명]`, `***`)
-- [ ] `modes/hashed.py` — 단방향 해시 (salt + 일관성 유지)
-- [ ] `generalization/` — 연령(10대→30대), 날짜(연 단위), 주소(시 단위), 직업(범주)
+- [x] `vault/reversible.py` — `ReversibleVault`, `VaultEntry` (JSON 스키마 v1)
+- [x] `modes/tokenize.py` — 가역 가명화 (`<PERSON_1>`, `<RRN_1>` 등 토큰)
+- [x] `modes/redact.py` — 비가역 마스킹 (`[성명]`, `***`) + asterisk/fixed 스타일
+- [x] `modes/hashed.py` — 단방향 해시 (salt + SHA-256, digest_len 조절)
+- [x] `generalization/` — 연령(10대→30대), 날짜(year/month/decade), 주소(시·도/시·군·구), 직업(범주)
 
-## Phase 6 — 법적 매핑 + 위험도 + 리포팅
+## Phase 6 — 법적 매핑 + 위험도 + 리포팅 ✅
 
-- [ ] `legal/mapping.py` — PII 카테고리 ↔ 개인정보보호법 조항 매핑 표 일원화
-- [ ] `core/modes.py` — `ProcessingMode` (PARANOID/STRICT/BALANCED/PERMISSIVE/AUDIT)
-- [ ] 통합 `Anonymizer` 클래스 — 임계값 + 차단/검토 결정 + 처리 모드 적용
-- [ ] `reporting/summary.py` — by_risk, by_action, by_legal_basis 요약
-- [ ] `reporting/certificate.py` — 처리 증명서 생성 (감사용)
-- [ ] CLI (`k_pii/cli.py`) — `k-pii input.txt --mode strict --vault vault.json`
+- [x] `legal/mapping.py` — PII 카테고리 ↔ 개인정보보호법 조항 매핑 표 일원화
+- [x] `core/modes.py` — `ProcessingMode` (PARANOID/STRICT/BALANCED/PERMISSIVE/AUDIT) + Action
+- [x] 통합 `Anonymizer` 클래스 — 임계값 + 차단/검토 결정 + 처리 모드 적용
+- [x] `reporting/summary.py` — by_risk, by_action, by_legal_basis 요약 + 텍스트/JSON 포맷
+- [x] `reporting/certificate.py` — 처리 증명서 생성 (감사용)
+- [x] CLI (`k_pii/cli.py`) — `k-pii input.txt --mode strict --vault vault.json --strategy tokenize`
 
 ## Phase 7 — 평가 & 문서화
 

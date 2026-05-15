@@ -25,6 +25,7 @@ LEGAL_BASIS_BY_LABEL: dict[str, str] = {
     "MEDICAL_INSURANCE": "국민건강보험법 제96조",
     # 일반 식별
     "PHONE": "개인정보보호법 제2조",
+    "FAX": "개인정보보호법 제2조",
     "EMAIL": "개인정보보호법 제2조",
     "POSTAL_CODE": "개인정보보호법 제2조",
     "IP": "개인정보보호법 제2조",
@@ -46,6 +47,7 @@ CATEGORY_BY_LABEL: dict[str, str] = {
     "ACCOUNT": "금융정보",
     "MEDICAL_INSURANCE": "민감정보(건강)",
     "PHONE": "일반개인정보",
+    "FAX": "일반개인정보",
     "EMAIL": "일반개인정보",
     "POSTAL_CODE": "일반개인정보",
     "IP": "일반개인정보",
@@ -66,6 +68,7 @@ _RISK_FLOOR_BY_LABEL: dict[str, RiskLevel] = {
     "ACCOUNT": RiskLevel.HIGH,
     "MEDICAL_INSURANCE": RiskLevel.HIGH,
     "PHONE": RiskLevel.MEDIUM,
+    "FAX": RiskLevel.LOW,
     "EMAIL": RiskLevel.MEDIUM,
     "POSTAL_CODE": RiskLevel.LOW,
     "IP": RiskLevel.MEDIUM,

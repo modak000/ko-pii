@@ -227,54 +227,39 @@ emit.
 | Phase | 상태 | 결과물 | 비고 |
 |-------|------|--------|------|
 | 1. 결정적 PII (체크섬) | ✅ 완료 | 8 카테고리 + 4 체크섬 모듈 | Day 1~3 |
-| 2. 비검증 PII (베이스라인) | ✅ 완료 | 8 카테고리 | 정확도는 베이스라인 수준 |
-| 3. 컨텍스트 기반 이름 탐지 | ⬜ 미착수 | — | **핵심 차별점**, 도메인 지식 필요 |
+| 2. 비검증 PII (베이스라인) | ✅ 완료 | 8 카테고리 + FAX | IPv6/+82/지번 보강 완료 |
+| 3. 컨텍스트 기반 이름 탐지 | ✅ 베이스라인 완료 | 사전 5종 + context + person.py | 사전 큐레이션은 사용자 입력 |
 | 4. 도메인 특화 (공문서·민원·인사) | ⬜ 미착수 | — | Phase 3 의존 |
-| 5. Vault + 모드 + 일반화 | ⬜ 미착수 | — | API 통합 |
-| 6. 법적 매핑 + 위험도 + 리포팅 | ⬜ 미착수 | — | CLI 포함 |
+| 5. Vault + 모드 + 일반화 | ✅ 완료 | vault + 3 modes + 4 generalizations | JSON schema v1 |
+| 6. 법적 매핑 + 위험도 + 리포팅 | ✅ 완료 | Anonymizer + 5 modes + reporting + CLI | `k-pii` 엔트리포인트 |
 | 7. 평가 + 문서화 | ⬜ 미착수 | — | 합성 데이터 + 벤치마크 |
 
 **누적 수치:**
-- PII 카테고리 16종
-- 테스트 207개, 0.21초 (Python 3.13)
+- PII 카테고리 18종 (Phase 1·2 17종 + PERSON)
+- 테스트 362개, ~0.3초 (Python 3.13)
 - 코어 dependencies 0개
-- Lines of code (src+tests) ~2200
+- Lines of code (src+tests) ~5500
 
 ## 7. 어디서 멈췄나 / 다음에 할 일
 
-**마지막 커밋:** `0407363` — Phase 2 베이스라인 (Phone, Email, Postal, IP, Vehicle,
-URL, Address, Account).
+**마지막 큰 작업:** Phase 5+6 (Vault·Anonymizer·CLI) + Phase 3 베이스라인 (사전·
+context·person.py) + Phase 2 보강 (IPv6/+82/지번/FAX) 일괄 구현. 테스트 362 passed.
 
-**바로 다음 후보 (사용자 입력 필요):**
+**바로 다음 후보:**
 
-A) **Phase 3 시작 (컨텍스트 이름 탐지)** — 본인이 사양 단계에서 강조한 *핵심*. 다음
-   순서 권장:
-   1. `dictionaries/surnames.py` — 한국 성씨 286개
-   2. `dictionaries/titles.py` + `titles_gov.py` — 직책·호칭
-   3. `dictionaries/agencies.py` — 부처·기관
-   4. `dictionaries/field_labels.py` — 공문서 필드 라벨 ("성명:", "신청인" 등)
-   5. `dictionaries/common_words.py` — FP 방지용 일반 단어 사전
-   6. `context/particles.py` — 한국어 조사 처리
-   7. `context/context_rules.py` — 점수 시스템 (CLAUDE.md D-XXX 미정 — 사양 시
-      제안된 점수표 참조)
-   8. `context/name_dictionary.py` — 누적 사전
-   9. `patterns/person.py` — 통합 이름 탐지기
+A) **Phase 4 (도메인 특화 룰)** — 공문서/민원/인사별 패턴 컬렉션. 사용자 실무
+   샘플 + 도메인 입력 필요.
 
-   주의: 사전 데이터는 사용자가 도메인 전문가로서 큐레이션 필요. 기본 시드는
-   AI가 만들되, "공무원 직책 사전 어느 부처까지 세분화?" 같은 질문은 본인에게
-   확인.
+B) **Phase 7 (평가 + 문서화)** — 합성 공문서 생성 → Precision/Recall/F1 벤치마크.
+   현재 점수 시스템의 가중치를 평가셋 기반으로 튜닝 가능.
 
-B) **Phase 5 (Vault + 모드)** — 검출 결과를 가역 가명화 토큰으로 묶기. Anonymizer
-   API 완성. Phase 3 없이도 진행 가능.
+C) **Phase 3.1 사전 큐레이션** — 성씨 286개 완본, 부처·직급 세분화, 일반 단어/
+   지명 사전 확장. 사용자 도메인 입력이 핵심.
 
-C) **Phase 6 (위험도 + 리포팅 + CLI)** — 외부 인터페이스 완성. 통합 Anonymizer
-   클래스 + 처리 모드 + CLI. 실용성 ↑.
+D) **Phase 2 잔여 보강** — 행정구역 사전 통합, 은행별 계좌 포맷 검증.
 
-D) **Phase 2 보강** — IPv6, 국제 전화 형식, 지번 주소, 행정구역 사전 통합 등.
-
-**권장 순서:** B (Vault) → C (API/CLI) → A (Phase 3) → D (보강). B+C가 먼저 끝나면
-라이브러리로서 "쓸 수 있는" 상태가 됨. Phase 3는 본인 입력이 많이 들어가야 하므로
-B+C로 토대를 만들고 시작하는 게 효율적.
+**권장 순서:** B (평가셋) → C (사전 확장) → A (도메인 룰). 평가 인프라가 먼저
+있어야 사전·룰 변경이 정확도에 어떻게 작용하는지 측정 가능.
 
 ## 8. 도메인 판단 대기 중인 항목 (사용자 입력 필요)
 
@@ -298,7 +283,8 @@ source .venv/bin/activate
 .venv/Scripts/activate
 pip install -e ".[dev]"
 pytest
-# 207 passed in ~0.2s 가 정상
+# 362 passed in ~0.3s 가 정상
+# CLI 사용: k-pii input.txt --mode STRICT --strategy tokenize --vault vault.json
 ```
 
 **필요한 도구:** Python 3.10 이상. 코어는 표준 라이브러리만, dev는 pytest.

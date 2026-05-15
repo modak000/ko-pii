@@ -2,7 +2,8 @@
 
 한국 공공 부문 문서를 위한 규칙 기반 개인정보(PII) 비식별 라이브러리.
 
-> **상태:** Phase 1 완료 (결정적 PII 8종) + Phase 2 베이스라인 완료 (비검증 PII 8종). 다음 단계는 컨텍스트 기반 이름 탐지 (Phase 3).
+> **상태:** Phase 1·2·3·5·6 완료 (PII 18종 + Vault + 처리 모드 + Anonymizer + 리포팅 + CLI).
+> 다음 단계는 도메인 특화 룰(공문서/민원/인사) 와 평가·문서화 (Phase 4·7).
 >
 > **AI 에이전트가 처음 이 레포에 합류한다면:** [CLAUDE.md](CLAUDE.md) 먼저 읽어주세요. 미션·설계 원칙·결정 기록·다음에 할 일이 모두 들어있습니다.
 
@@ -23,36 +24,79 @@
 
 ## 현재 구현 상태
 
-### Phase 1 — 결정적 PII (체크섬 기반)
+### Phase 1 — 결정적 PII (체크섬 기반) ✅
 
-| 항목 | 상태 | 비고 |
-|------|------|------|
-| 주민등록번호 (RRN) + 체크섬 | ✅ | 한국인 전용 (gender 1·2·3·4·9·0); 후-2020 무작위화 신뢰도 0.7 반영 |
-| 외국인등록번호 (FRN) | ✅ | 외국인 전용 (gender 5·6·7·8); RRN과 동일 체크섬 |
-| 사업자등록번호 + 체크섬 | ✅ | 국세청 알고리즘 (10자리) |
-| 법인등록번호 + 체크섬 | ✅ | Luhn-like (13자리); RRN과 동시 일치 시 RRN 우선 |
-| 운전면허번호 | ✅ | 12자리 포맷 + 지방청 코드 11~28 검증 (체크섬 미공개) |
-| 여권번호 | ✅ | 1-2자 prefix(M/S/G/O/D/R…) + 8자리, 체크섬 미공개 |
-| 카드번호 + Luhn | ✅ | 13~19자리, Luhn mod-10 검증 |
-| 의료보험증번호 | ✅ | 11자리, "건강보험/의료보험/보험증" 키워드 25자 윈도우 |
+| 항목 | 비고 |
+|------|------|
+| 주민등록번호 (RRN) + 체크섬 | 한국인 전용 (gender 1·2·3·4·9·0); 후-2020 무작위화 신뢰도 0.7 반영 |
+| 외국인등록번호 (FRN) | 외국인 전용 (gender 5·6·7·8); RRN과 동일 체크섬 |
+| 사업자등록번호 + 체크섬 | 국세청 알고리즘 (10자리) |
+| 법인등록번호 + 체크섬 | Luhn-like (13자리); RRN과 동시 일치 시 RRN 우선 |
+| 운전면허번호 | 12자리 포맷 + 지방청 코드 11~28 검증 |
+| 여권번호 | 1-2자 prefix + 8자리 |
+| 카드번호 + Luhn | 13~19자리, Luhn mod-10 검증 |
+| 의료보험증번호 | 11자리, "건강보험/의료보험/보험증" 키워드 25자 윈도우 |
 
-### Phase 2 — 비검증 PII (정규식 + 컨텍스트)
+### Phase 2 — 비검증 PII ✅
 
-| 항목 | 상태 | 비고 |
-|------|------|------|
-| 전화번호 (휴대/일반/070) | ✅ | 010~019 / 02 / 031~064 / 070, 4가지 분리자 |
-| 이메일 | ✅ | RFC 5322 실용 부분집합 |
-| 우편번호 | ✅ | 5자리(키워드 필수) + 6자리(레거시 하이픈) |
-| IP 주소 (IPv4) | ✅ | 옥텟 0~255 검증 |
-| 차량번호 | ✅ | 신형 NN(N)[가-힣]NNNN |
-| URL | ✅ | http(s) — INFO 수준 |
-| 도로명 주소 | ✅ | 시·도/구·군 prefix 또는 "주소" 키워드 anchor (베이스라인) |
-| 은행 계좌번호 | ✅ | "계좌" 키워드 anchor (10~16자리, 베이스라인) |
+| 항목 | 비고 |
+|------|------|
+| 전화번호 (휴대/일반/070/국제) | 010~019 / 02 / 031~064 / 070; `+82` / `0082` 지원 |
+| 팩스번호 | "팩스/FAX/전송" 키워드 anchor |
+| 이메일 | RFC 5322 실용 부분집합 |
+| 우편번호 | 5자리(키워드 필수) + 6자리(레거시 하이픈) |
+| IP 주소 | IPv4 (옥텟 0~255 검증) + **IPv6** (RFC 4291, 단축/IPv4-mapped 포함) |
+| 차량번호 | 신형 NN(N)[가-힣]NNNN |
+| URL | http(s) — INFO 수준 |
+| 주소 | 도로명(로/길/대로) + **지번(동/읍/면/리 + 번지)** |
+| 은행 계좌번호 | "계좌" 키워드 anchor |
 
-이후 Phase에서 비검증 PII(전화/이메일/주소 등), 컨텍스트 기반 이름 탐지,
-Vault/모드 시스템, 도메인별 특화 룰을 추가합니다.
+### Phase 3 — 컨텍스트 기반 이름 탐지 ✅
+
+- 한국 성씨 사전 (140+, 합성성씨 포함) + 일반 직책·공무원 직책 사전
+- 부처/기관/지자체 사전 + 공문서 필드 라벨 사전 + 일반 단어(FP 방지) 사전
+- 한국어 조사 처리 (이/가/은/는/을/를/에/에게/한테/께서 등)
+- 점수 기반 컨텍스트 평가 (필드 라벨/직책/결정적 PII 인접/조사/누적 사전 등)
+- 문서 내 누적 사전 — 강한 단서로 확정된 이름은 약한 위치에서도 재인식
+
+### Phase 5 — Vault + 처리 모드 ✅
+
+- `ReversibleVault` — 가역 가명화 저장소 (JSON schema v1, salted SHA-256 fingerprint)
+- `tokenize` / `redact` / `hashed` — 3가지 치환 전략
+- `generalization/{age,date,address,occupation}` — 일반화 (구간화·상위 행정구역·범주)
+
+### Phase 6 — 통합 API + 정책 + 리포팅 + CLI ✅
+
+- `ProcessingMode` — PARANOID / STRICT / BALANCED / PERMISSIVE / AUDIT
+- `Anonymizer` 통합 클래스 — 검출 → 정책 결정 → 처리 (BLOCK / REVIEW / ALLOW)
+- `legal/mapping.py` — 카테고리 ↔ 법조항 단일 매핑
+- `reporting/{summary,certificate}.py` — 처리 요약 + 감사 증명서
+- `k-pii` CLI — `k-pii input.txt --mode STRICT --strategy tokenize --vault vault.json`
 
 ## 빠른 시작
+
+### 통합 API
+
+```python
+from k_pii import Anonymizer, ProcessingMode
+
+anon = Anonymizer(mode=ProcessingMode.STRICT, strategy="tokenize")
+result = anon.process("신청인 홍길동(880101-1234568) 연락처 010-1234-5678")
+
+print(result.text)
+# 신청인 <PERSON_1>(<RRN_1>) 연락처 <PHONE_1>
+
+print(result.vault.reveal("<RRN_1>"))      # → 880101-1234568
+print(result.summary["by_label"])          # → {'RRN': 1, 'PHONE': 1, 'PERSON': 1}
+```
+
+### CLI
+
+```bash
+k-pii input.txt --mode STRICT --strategy tokenize --vault vault.json -o out.txt --report cert.txt
+```
+
+### 개별 검출기
 
 ```python
 from k_pii.patterns.rrn import detect
@@ -69,6 +113,7 @@ python -m venv .venv
 .venv/Scripts/activate    # Windows
 pip install -e ".[dev]"
 pytest -v
+# 358 passed in ~0.3s
 ```
 
 ## 라이선스

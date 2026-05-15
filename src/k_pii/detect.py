@@ -12,10 +12,12 @@ from k_pii.patterns import (
     corp_reg,
     driver_license,
     email,
+    fax,
     frn,
     ip,
     medical_insurance,
     passport,
+    person,
     phone,
     postal_code,
     rrn,
@@ -32,6 +34,7 @@ DETECTORS = (
     passport.detect,
     card.detect,
     medical_insurance.detect,
+    fax.detect,         # FAX before phone — keyword anchor avoids overlap
     phone.detect,
     email.detect,
     postal_code.detect,
@@ -40,6 +43,7 @@ DETECTORS = (
     url.detect,
     address.detect,
     account.detect,
+    person.detect,
 )
 
 
