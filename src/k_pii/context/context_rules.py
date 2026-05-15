@@ -163,10 +163,11 @@ def score_candidate(
         score += 0.35
         ev.append(f"pos:title({title}{':gov' if gov else ''})")
 
-    # Particle attached
+    # Particle attached — 한국어의 강한 PERSON 신호
+    # 예: "장혁이 울었다" → surname + particle 만으로도 인명 인식 가능해야
     p = _has_particle_attached(text, cand.end)
     if p:
-        score += 0.20
+        score += 0.35
         ev.append(f"pos:particle({p})")
 
     # Deterministic PII adjacent — strong cue: RRN/PHONE next to a Korean
