@@ -21,7 +21,12 @@ from k_pii.dictionaries.agency_abbrev import (
 from k_pii.dictionaries.districts import (
     PROVINCES, PROVINCE_ABBREV,
     SEOUL_DISTRICTS, METRO_DISTRICTS, ALL_CITIES_GUNS, ALL_DISTRICTS,
+    PROVINCE_DISTRICTS,
     is_province, is_district, is_admin_unit, normalize_province,
+    is_valid_province_district, districts_of,
+)
+from k_pii.dictionaries.agency_titles import (
+    valid_titles_for, is_valid_agency_title, specialized_agencies_for,
 )
 from k_pii.dictionaries.field_labels import FIELD_LABELS, is_field_label
 from k_pii.dictionaries.common_words import COMMON_WORDS, is_common_word
@@ -41,10 +46,13 @@ __all__ = [
     # abbreviations
     "KOR_ABBREV_TO_FULL", "ENG_ABBREV_TO_KOR",
     "DOC_ID_PREFIXES", "normalize_agency", "is_doc_id_prefix",
-    # districts
-    "PROVINCES", "PROVINCE_ABBREV",
+    # districts (조합 사전 포함)
+    "PROVINCES", "PROVINCE_ABBREV", "PROVINCE_DISTRICTS",
     "SEOUL_DISTRICTS", "METRO_DISTRICTS", "ALL_CITIES_GUNS", "ALL_DISTRICTS",
     "is_province", "is_district", "is_admin_unit", "normalize_province",
+    "is_valid_province_district", "districts_of",
+    # 부처×직급 조합
+    "valid_titles_for", "is_valid_agency_title", "specialized_agencies_for",
     # other
     "FIELD_LABELS", "is_field_label",
     "COMMON_WORDS", "is_common_word",

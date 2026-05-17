@@ -52,17 +52,32 @@ def _has_anchor(text: str, start: int, city: str | None, district: str | None) -
     return None
 
 
+def _first_district_of(districts_str: str) -> str | None:
+    """``"성남시 분당구 "`` → ``"성남시"`` (첫 시·군·구 추출)."""
+    if not districts_str:
+        return None
+    parts = districts_str.split()
+    return parts[0] if parts else None
+
+
 def detect(text: str) -> Iterator[DetectionResult]:
     seen: set[tuple[int, int]] = set()
 
-    from k_pii.dictionaries.districts import is_province
+    from k_pii.dictionaries.districts import (
+        is_province,
+        is_valid_province_district,
+    )
 
     for m in _PATTERN_ROAD.finditer(text):
         city = m.group(1)
         districts = (m.group(2) or "").strip()
         # 시·도 prefix 가 있다면 *실제 한국 17개 광역지자체* 인지 검증
-        # ("바티스타밤이라도" 같은 한글 단어가 "...도" 끝난다고 매칭되는 것 거부)
         if city and not is_province(city):
+            continue
+        # (광역+기초) 조합 검증 — 둘 다 있으면 실제 매핑인지 확인
+        # 예: "경기도 강남구 ..." → 강남구는 서울 → 거부
+        first_district = _first_district_of(districts)
+        if city and first_district and not is_valid_province_district(city, first_district):
             continue
         anchor = _has_anchor(text, m.start(), city, districts)
         if anchor is None:
@@ -96,6 +111,10 @@ def detect(text: str) -> Iterator[DetectionResult]:
         districts = (m.group(2) or "").strip()
         # 시·도 prefix 검증 (위와 동일 — "바티스타밤이라도" 거부)
         if city and not is_province(city):
+            continue
+        # (광역+기초) 조합 검증
+        first_district = _first_district_of(districts)
+        if city and first_district and not is_valid_province_district(city, first_district):
             continue
         anchor = _has_anchor(text, m.start(), city, districts)
         if anchor is None:

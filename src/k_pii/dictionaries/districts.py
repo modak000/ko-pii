@@ -174,6 +174,77 @@ ALL_DISTRICTS: frozenset[str] = (
 )
 
 
+# ─────────────────────────────────────────────────────────────────────
+# 광역 → 기초자치단체 매핑 (조합 사전)
+# 가짜 주소 거부용 — (광역+기초) 조합이 실제 한국 행정구역인지 검증
+# 출처: 행정안전부 행정구역 표준 데이터 (2025)
+# ─────────────────────────────────────────────────────────────────────
+
+# 광역시별 자치구·군 매핑 (각자 가진 자치구만 정확히)
+_BUSAN = frozenset({
+    "중구", "서구", "동구", "영도구", "부산진구", "동래구", "남구",
+    "북구", "해운대구", "사하구", "금정구", "강서구", "연제구",
+    "수영구", "사상구", "기장군",
+})
+_DAEGU = frozenset({
+    "중구", "동구", "서구", "남구", "북구", "수성구", "달서구",
+    "달성군", "군위군",
+})
+_INCHEON = frozenset({
+    "중구", "동구", "미추홀구", "연수구", "남동구", "부평구",
+    "계양구", "서구", "강화군", "옹진군",
+})
+_GWANGJU = frozenset({"동구", "서구", "남구", "북구", "광산구"})
+_DAEJEON = frozenset({"동구", "중구", "서구", "유성구", "대덕구"})
+_ULSAN = frozenset({"중구", "남구", "동구", "북구", "울주군"})
+
+PROVINCE_DISTRICTS: dict[str, frozenset[str]] = {
+    "서울특별시": SEOUL_DISTRICTS,
+    "부산광역시": _BUSAN,
+    "대구광역시": _DAEGU,
+    "인천광역시": _INCHEON,
+    "광주광역시": _GWANGJU,
+    "대전광역시": _DAEJEON,
+    "울산광역시": _ULSAN,
+    "세종특별자치시": frozenset(),  # 세종은 단일 시 — 하위 구 없음
+    "경기도": GYEONGGI_CITIES,
+    "강원특별자치도": GANGWON_CITIES,
+    "충청북도": CHUNGBUK_CITIES,
+    "충청남도": CHUNGNAM_CITIES,
+    "전북특별자치도": JEONBUK_CITIES,
+    "전라남도": JEONNAM_CITIES,
+    "경상북도": GYEONGBUK_CITIES,
+    "경상남도": GYEONGNAM_CITIES,
+    "제주특별자치도": JEJU_CITIES,
+}
+# 약칭도 같은 매핑
+for abbrev, full in list(PROVINCE_ABBREV.items()):
+    if full in PROVINCE_DISTRICTS:
+        PROVINCE_DISTRICTS[abbrev] = PROVINCE_DISTRICTS[full]
+
+
+def is_valid_province_district(province: str, district: str) -> bool:
+    """``(광역, 기초)`` 조합이 실제 한국 행정구역인지 검증.
+
+    >>> is_valid_province_district("경기도", "성남시")
+    True
+    >>> is_valid_province_district("경기도", "강남구")  # 강남구는 서울
+    False
+    >>> is_valid_province_district("서울특별시", "강남구")
+    True
+    """
+    if not province or not district:
+        return False
+    if province not in PROVINCE_DISTRICTS:
+        return False
+    return district in PROVINCE_DISTRICTS[province]
+
+
+def districts_of(province: str) -> frozenset[str]:
+    """주어진 광역의 자치구·군 집합 반환."""
+    return PROVINCE_DISTRICTS.get(province, frozenset())
+
+
 def is_province(token: str) -> bool:
     return token in PROVINCES or token in PROVINCE_ABBREV
 
