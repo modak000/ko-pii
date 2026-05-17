@@ -66,6 +66,25 @@ _PATTERN = re.compile(
     r"(?![0-9])"  # allow Korean particles to follow ("12가3456의 차량")
 )
 
+# 차량번호 뒤에 따라오면 차량 X — 한국어 수량·통화 단위어
+_FOLLOWING_UNIT_REJECT: tuple[str, ...] = (
+    "원", "달러", "엔", "위안", "유로", "파운드", "프랑",
+    "억", "만", "천", "백", "조",
+    "%", "퍼센트", "퍼센트포인트",
+    "포인트", "포",
+    "건", "건수", "명", "년", "월", "일", "시간", "분", "초",
+    "톤", "kg", "g", "m", "km", "mm",
+)
+
+
+def _has_unit_after(text: str, end: int) -> str | None:
+    """차량번호 뒤에 한국어 수량/통화 단위가 따라오면 차량 아님."""
+    tail = text[end: end + 8].lstrip()
+    for unit in _FOLLOWING_UNIT_REJECT:
+        if tail.startswith(unit):
+            return unit
+    return None
+
 
 def detect(text: str) -> Iterator[DetectionResult]:
     for m in _PATTERN.finditer(text):
@@ -76,6 +95,10 @@ def detect(text: str) -> Iterator[DetectionResult]:
         suffix = m.group(3)
         # 뒷 4자리 0000 은 placeholder/시범 번호 — 실제 차량 아님
         if suffix == "0000":
+            continue
+        # 뒤에 한국어 수량·통화 단위 → 차량 아님 ("291조9000억 원" 등)
+        unit = _has_unit_after(text, m.end())
+        if unit:
             continue
         yield DetectionResult(
             label=LABEL,

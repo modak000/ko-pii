@@ -55,9 +55,15 @@ def _has_anchor(text: str, start: int, city: str | None, district: str | None) -
 def detect(text: str) -> Iterator[DetectionResult]:
     seen: set[tuple[int, int]] = set()
 
+    from k_pii.dictionaries.districts import is_province
+
     for m in _PATTERN_ROAD.finditer(text):
         city = m.group(1)
         districts = (m.group(2) or "").strip()
+        # 시·도 prefix 가 있다면 *실제 한국 17개 광역지자체* 인지 검증
+        # ("바티스타밤이라도" 같은 한글 단어가 "...도" 끝난다고 매칭되는 것 거부)
+        if city and not is_province(city):
+            continue
         anchor = _has_anchor(text, m.start(), city, districts)
         if anchor is None:
             continue
@@ -88,6 +94,9 @@ def detect(text: str) -> Iterator[DetectionResult]:
             continue  # already claimed by road pattern
         city = m.group(1)
         districts = (m.group(2) or "").strip()
+        # 시·도 prefix 검증 (위와 동일 — "바티스타밤이라도" 거부)
+        if city and not is_province(city):
+            continue
         anchor = _has_anchor(text, m.start(), city, districts)
         if anchor is None:
             continue

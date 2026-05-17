@@ -33,6 +33,9 @@ _PATTERN = re.compile(
 def detect(text: str) -> Iterator[DetectionResult]:
     for m in _PATTERN.finditer(text):
         digits = m.group(1) + m.group(2) + m.group(3)
+        # 모두 0 인 placeholder 거부 (체크섬 통과해도 실제 사업자 아님)
+        if digits == "0000000000":
+            continue
         if not is_valid_checksum(digits):
             continue
         yield DetectionResult(

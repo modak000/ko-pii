@@ -92,6 +92,10 @@ def detect(text: str) -> Iterator[DetectionResult]:
         # Filter trivial cases that the loose regex may match.
         if ":" not in addr:
             continue
+        # 단독 "::" 만 매칭은 거부 — 텍스트에서 *주 내용 ::* 같은 패턴
+        # (한국어 자유 텍스트의 ":" 강조 표기)
+        if addr.strip() in ("::", ""):
+            continue
         if not _is_valid_ipv6(addr):
             continue
         seen.add(span)
