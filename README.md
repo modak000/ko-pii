@@ -1,11 +1,28 @@
 # k-pii
 
-한국 공공 부문 문서를 위한 규칙 기반 개인정보(PII) 비식별 라이브러리.
+[![Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Tests](https://img.shields.io/badge/tests-642%20passed-brightgreen.svg)](#)
+[![Korean PII](https://img.shields.io/badge/도메인-한국%20공공-red.svg)](#)
 
-> **상태:** Phase 1~11 완료 — **솔루션 + 외부 ML 옵셔널 통합**.
-> 25 PII + 6 처리 전략 + HWP/PDF/표 입력 + Vault 암호화 + 감사 로그 + 배치 + 검토 큐 + HTML 리포트 + 한자/로마자 + **OpenAI Privacy Filter 어댑터**.
+한국 공공 부문 문서를 위한 규칙 기반 개인정보(PII) 비식별 라이브러리. **외부 ML 없이** 룰만으로 production-ready.
+
+> **상태:** v1.0.0 release-ready — **한국 공공 PII 솔루션**.
+> 25 PII + 6 처리 전략 + HWP/PDF/표 입력 + Vault 암호화 + 감사 로그 + 배치 + 검토 큐 + HTML 리포트 + 한자/로마자 + **OpenAI Privacy Filter / Presidio / MCP 옵셔널 연계**.
 > 합성 코퍼스 480문서 micro F1 = 1.000 / KLUE-NER Korean-only F1 = 0.331.
-> 코어 deps 0개. 입력·보안·ML 기능은 ``[file]`` / ``[security]`` / ``[ml]`` extras 로 분리.
+> **코어 deps 0개**. 입력·보안·ML·Presidio·MCP 기능은 모두 extras 로 분리.
+
+## 설치
+
+```bash
+pip install k-pii                       # 코어만 — deps 0
+pip install k-pii[file]                 # + HWP/PDF 입력
+pip install k-pii[security]             # + Vault AES-GCM 암호화
+pip install k-pii[ml]                   # + OpenAI Privacy Filter
+pip install k-pii[presidio]             # + Microsoft Presidio plugin
+pip install k-pii[mcp]                  # + Claude Desktop MCP 서버
+pip install k-pii[all]                  # 모든 옵션
+```
 >
 > **AI 에이전트가 처음 이 레포에 합류한다면:** [CLAUDE.md](CLAUDE.md) 먼저 읽어주세요. 미션·설계 원칙·결정 기록·다음에 할 일이 모두 들어있습니다.
 
@@ -95,23 +112,44 @@
 - `eval/benchmark.py` — `python -m k_pii.eval.benchmark -n 60` 으로 즉시 평가
 - `docs/{legal_mapping,risk_levels,coverage}.md` — 법조항·위험도·커버리지 문서
 
-### Phase 11 — 외부 ML 모델 연계 ✅ (옵셔널)
+### Phase 11 — 외부 통합 ✅ (옵셔널)
 
-**OpenAI Privacy Filter** (Apache-2.0, 2026.4, 1.5B params) 와의 hybrid 통합:
-- `src/k_pii/integrations/` — SecondaryDetector 프로토콜 + 어댑터들
-- `merge_detections()` — 4가지 모드 (union/intersection/cross_validation/enrich_primary)
-- `Anonymizer(secondary_detector=...)` — k-pii 룰 + ML 자연어 보강
-- *코어 deps 0 유지* — ML 은 `[ml]` extras 로만 설치
-- 가이드: [docs/integration_openai_privacy_filter.md](docs/integration_openai_privacy_filter.md)
+**OpenAI Privacy Filter** + **Microsoft Presidio** + **MCP 서버** — 모두 optional:
 
 ```python
+# 1) OpenAI Privacy Filter (hybrid, [ml] extras)
 from k_pii import Anonymizer, get_privacy_filter_adapter
-
-pf = get_privacy_filter_adapter(device="cpu")  # 또는 cuda/mps
+pf = get_privacy_filter_adapter(device="cpu")
 anon = Anonymizer(secondary_detector=pf, merge_mode="union")
-result = anon.process(korean_doc)
-# k-pii (룰·결정적 PII·법적 매핑) + Privacy Filter (ML 자연어) 합산
+
+# 2) Microsoft Presidio plugin ([presidio] extras)
+from presidio_analyzer import AnalyzerEngine
+from k_pii.integrations.presidio_plugin import KPiiRecognizer
+analyzer = AnalyzerEngine()
+analyzer.registry.add_recognizer(KPiiRecognizer())  # 22개 한국 라벨 자동 추가
+
+# 3) MCP 서버 — Claude Desktop 등 LLM 도구로 노출 ([mcp] extras)
+# claude_desktop_config.json:
+# {"mcpServers": {"k-pii": {"command": "k-pii-mcp-server"}}}
 ```
+
+가이드:
+- [`docs/integration_openai_privacy_filter.md`](docs/integration_openai_privacy_filter.md)
+- [`docs/integration_presidio.md`](docs/integration_presidio.md)
+- [`docs/integration_mcp.md`](docs/integration_mcp.md)
+
+### 빠른 시작 / 예제
+
+`examples/` 디렉토리 — 15개 실행 가능 스크립트:
+
+| | |
+|---|---|
+| `01_basic_anonymize.py` | 기본 가명화 |
+| `13_llm_safe_filter.py` | **LLM 호출 전 PII 필터** (가장 핫한 use case) |
+| `14_hybrid_with_privacy_filter.py` | OpenAI Privacy Filter 연계 |
+| `15_presidio_integration.py` | Microsoft Presidio plugin |
+
+전체 목록: [`examples/README.md`](examples/README.md)
 
 ### Phase 10 — 솔루션 인프라 ✅
 
