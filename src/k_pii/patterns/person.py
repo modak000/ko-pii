@@ -23,6 +23,7 @@ from k_pii.context.particles import strip_trailing_particle
 from k_pii.core.types import DetectionResult, RiskLevel
 from k_pii.dictionaries.agencies import is_agency
 from k_pii.dictionaries.agency_abbrev import normalize_agency
+from k_pii.dictionaries.agency_titles import is_valid_agency_title
 from k_pii.dictionaries.common_words import is_common_word
 from k_pii.dictionaries.districts import is_district, is_province
 from k_pii.dictionaries.field_labels import is_field_label
@@ -172,6 +173,49 @@ _AGE_GENDER_PATTERN = re.compile(
 )
 
 
+# 3중 매크로 패턴 — <AGENCY> <PERSON> <TITLE>
+# 예: "기획재정부 김민수 장관", "환경부 박영수 차관", "경찰청 이형사 경감"
+# 정규식이 *세 토큰* 을 한 번에 매칭. 매칭되면 *극강* PERSON 확신.
+_MACRO_AGENCY_PERSON_TITLE = re.compile(
+    r"(?<![가-힣A-Za-z0-9])"
+    r"([가-힣]{2,15}(?:부|처|청|위원회|원|국|실|단|장|소))"   # <AGENCY>
+    r"(?:\s+|[\s\-/])"
+    r"([가-힣]{2,4})"                                          # <PERSON 후보>
+    r"(?:\s+|[\s\-/])"
+    r"([가-힣]{2,8})"                                          # <TITLE 후보>
+    r"(?![가-힣A-Za-z0-9])"
+)
+
+
+def _macro_matches(text: str) -> Iterator[tuple[int, int, str, str, str]]:
+    """매크로 패턴 매칭 → ``(person_start, person_end, agency, person, title)``.
+
+    조건: agency 가 *알려진 기관* (또는 약칭) 이고, title 이 *해당 기관에서
+    유효* 한 직급/직위.
+    """
+    for m in _MACRO_AGENCY_PERSON_TITLE.finditer(text):
+        agency = m.group(1)
+        person_cand = m.group(2)
+        title_cand = m.group(3)
+        # agency 검증 — 사전 + 약칭
+        canonical_agency = None
+        if is_agency(agency):
+            canonical_agency = agency
+        else:
+            normalized = normalize_agency(agency)
+            if normalized:
+                canonical_agency = normalized
+        if canonical_agency is None:
+            continue
+        # title 검증 — 해당 기관에서 유효한가?
+        if not is_valid_agency_title(canonical_agency, title_cand):
+            continue
+        # person 후보 위치 — group(2) 시작
+        person_start = m.start(2)
+        person_end = m.end(2)
+        yield person_start, person_end, canonical_agency, person_cand, title_cand
+
+
 def _has_age_or_gender_after(text: str, end: int, window: int = 12) -> str | None:
     tail = text[end: end + window]
     m = _AGE_GENDER_PATTERN.match(tail)
@@ -222,11 +266,52 @@ def _detect_with_dict(
     ]
     threshold = 0.50
 
+    # ------ Pass 0: 3중 매크로 패턴 — <AGENCY> <PERSON> <TITLE>
+    # 고신뢰 인명 추출 + 누적 사전에 *즉시 등록* → 같은 문서 내 다른 등장도
+    # 누적 사전 부스트로 잡힘
+    macro_spans: set[tuple[int, int]] = set()
+    for p_start, p_end, agency, person_text, title in _macro_matches(text):
+        # 합리성 추가 검증 — 이름 부분이 common_word 가 아닌지
+        if is_common_word(person_text):
+            continue
+        # field_label / title 자체는 PERSON 이 아님
+        if is_field_label(person_text) or is_title(person_text):
+            continue
+        if is_agency(person_text) or normalize_agency(person_text) is not None:
+            continue
+        cand = NameCandidate(name=person_text, start=p_start, end=p_end)
+        evidence = [
+            "pattern:macro_agency_person_title",
+            f"pos:agency({agency})",
+            f"pos:title_validated({title})",
+        ]
+        # 매크로 통과 = 0.95 신뢰
+        name_dict.add(person_text, 0.95, (p_start, p_end), evidence)
+        macro_spans.add((p_start, p_end))
+
     pending: list[tuple[NameCandidate, float, list[str], str | None]] = []
     emitted: list[tuple] = []  # (cand, particle, score, evidence)
+    # 매크로로 잡은 것은 우선 emit
+    for p_start, p_end, agency, person_text, title in _macro_matches(text):
+        if is_common_word(person_text):
+            continue
+        if is_field_label(person_text) or is_title(person_text):
+            continue
+        if is_agency(person_text) or normalize_agency(person_text) is not None:
+            continue
+        cand = NameCandidate(name=person_text, start=p_start, end=p_end)
+        evidence = [
+            "pattern:macro_agency_person_title",
+            f"pos:agency({agency})",
+            f"pos:title_validated({title})",
+        ]
+        emitted.append((cand, None, 0.95, evidence))
     # ------ Pass A
     for m in _CANDIDATE.finditer(text):
         raw = m.group(1)
+        # 매크로로 이미 잡힌 span 은 중복 emit 방지
+        if (m.start(), m.start() + len(raw)) in macro_spans:
+            continue
         label_before = _label_before(text, m.start())
         # Reject raw tokens that match an agency in the dictionary, or look
         # like an administrative-unit name (경기도, 성남시, 가평군) — unless
