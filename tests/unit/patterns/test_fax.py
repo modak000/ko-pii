@@ -19,14 +19,18 @@ class TestFaxPositive:
         assert len(_d("FAX: 02-123-4567")) == 1
         assert len(_d("fax 02 123 4567")) == 1
 
-    def test_jeonsong_keyword(self):
-        assert len(_d("전송 031-123-4567")) == 1
-
-
 class TestFaxNegative:
     def test_no_keyword_no_match(self):
         # Without a fax-keyword anchor it must not be claimed by this module
         assert _d("02-123-4567") == []
+
+    def test_removed_jeonsong_keyword(self):
+        # "전송" 키워드는 FP 위험으로 제거됨 — 일반 동사 충돌
+        assert _d("전송 031-123-4567") == []
+
+    def test_removed_f_dot_keyword(self):
+        # "F." 키워드는 FP 위험으로 제거됨 (Grade F. 등 약자 충돌)
+        assert _d("F. 02-123-4567") == []
 
     def test_unrelated_keyword(self):
         assert _d("주소: 02-123-4567") == []

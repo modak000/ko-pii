@@ -14,10 +14,10 @@ class TestEdiDrugKD13:
         assert r.extra["country_id"] == "880"
 
     def test_kd13_other_korean_prefix(self):
-        assert len(_d("표준코드 8811234567890")) == 1
+        assert len(_d("KD코드: 8811234567890")) == 1
 
     def test_kd13_non_korean_rejected(self):
-        assert _d("표준코드 1234567890123") == []
+        assert _d("KD코드: 1234567890123") == []
 
 
 class TestEdiDrug9:

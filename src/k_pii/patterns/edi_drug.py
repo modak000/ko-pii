@@ -36,11 +36,12 @@ _PATTERN_9 = re.compile(
     r"(?![0-9])"
 )
 
+# FP 위험으로 제거된 키워드:
+#   - "표준코드" : 일반 산업·제품 표준 코드와 충돌 (의약품 한정 단서 부족)
 _KEYWORDS = (
     "EDI", "edi",
     "약품코드", "의약품코드", "주성분코드",
     "KD코드", "KD 코드", "약가코드",
-    "표준코드",  # broad — but only paired with longer 13-digit
 )
 
 

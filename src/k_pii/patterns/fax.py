@@ -26,7 +26,11 @@ _PATTERN = re.compile(
     r"(?![0-9])"
 )
 
-_KEYWORDS = ("팩스", "FAX", "fax", "Fax", "F.", "전송")
+# FP 위험으로 제거된 키워드:
+#   - "F."   : 알파벳 약자 "Grade F." 등과 충돌
+#   - "전송" : "데이터 전송" 같은 일반 동사 충돌 (FAX 키워드는 "팩스/FAX"
+#             명시 표기가 표준 양식이므로 일반 동사는 굳이 필요 없음)
+_KEYWORDS = ("팩스", "FAX", "fax", "Fax")
 
 
 def _has_keyword_before(text: str, start: int, window: int = 12) -> str | None:
