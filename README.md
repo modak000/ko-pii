@@ -41,169 +41,134 @@ pip install k-pii[all]                  # 모든 옵션
 5. **법적 근거 매핑** — 각 탐지 결과에 개인정보보호법 조항 부착(감사 추적용).
 6. **컨텍스트 누적 식별** — 문서 내에서 강한 단서로 확정된 이름을 약한 단서에서도 인식.
 
-## 현재 구현 상태
+## 용어 — 이게 무슨 뜻?
 
-### Phase 1 — 결정적 PII (체크섬 기반) ✅
+> 본 라이브러리를 처음 보는 사람을 위한 핵심 용어 5가지.
 
-| 항목 | 비고 |
-|------|------|
-| 주민등록번호 (RRN) + 체크섬 | 한국인 전용 (gender 1·2·3·4·9·0); 후-2020 무작위화 신뢰도 0.7 반영 |
-| 외국인등록번호 (FRN) | 외국인 전용 (gender 5·6·7·8); RRN과 동일 체크섬 |
-| 사업자등록번호 + 체크섬 | 국세청 알고리즘 (10자리) |
-| 법인등록번호 + 체크섬 | Luhn-like (13자리); RRN과 동시 일치 시 RRN 우선 |
-| 운전면허번호 | 12자리 포맷 + 지방청 코드 11~28 검증 |
-| 여권번호 | 1-2자 prefix + 8자리 |
-| 카드번호 + Luhn | 13~19자리, Luhn mod-10 검증 |
-| 의료보험증번호 | 11자리, "건강보험/의료보험/보험증" 키워드 25자 윈도우 |
+**체크섬 (Checksum)** — 번호 자체에 *수학적 검증 숫자* 가 들어있는 것.
+예: 주민등록번호 마지막 자리는 앞 12자리로부터 계산되는 검증 숫자. 임의의
+13자리 숫자가 우연히 통과할 확률은 1/11 (약 9%). 카드 번호의 Luhn, 사업자
+번호의 국세청 알고리즘, RRN 알고리즘 등이 있음. **체크섬 실패 = 그냥 숫자열,
+실제 PII 아님** 으로 거의 확정 가능. 단, 후-2020 RRN 무작위화 같은 예외는
+별도 처리.
 
-### Phase 2 — 비검증 PII ✅
+**키워드 anchor** — `상병코드 S00.0` 처럼 "키워드 + 그 뒤(또는 앞)에 형식
+맞는 값" 둘 다 있어야 검출. 단순 형식만으로는 FP 가 너무 많은 카테고리
+(전화번호 닮은 계좌번호, 11자리 보험증 vs 휴대전화) 에 사용. 거리·콜론·
+공백 옵션은 카테고리별로 다름.
 
-| 항목 | 비고 |
-|------|------|
-| 전화번호 (휴대/일반/070/국제) | 010~019 / 02 / 031~064 / 070; `+82` / `0082` 지원 |
-| 팩스번호 | "팩스/FAX/전송" 키워드 anchor |
-| 이메일 | RFC 5322 실용 부분집합 |
-| 우편번호 | 5자리(키워드 필수) + 6자리(레거시 하이픈) |
-| IP 주소 | IPv4 (옥텟 0~255 검증) + **IPv6** (RFC 4291, 단축/IPv4-mapped 포함) |
-| 차량번호 | 신형 NN(N)[가-힣]NNNN |
-| URL | http(s) — INFO 수준 |
-| 주소 | 도로명(로/길/대로) + **지번(동/읍/면/리 + 번지)** |
-| 은행 계좌번호 | "계좌" 키워드 anchor |
+**ProcessingMode (사용자가 고르는 단계)** — *얼마나 엄격하게 차단할지* 선택.
+| 모드 | 차단 기준 | 용도 |
+|---|---|---|
+| `PARANOID` | LOW 이상 모두 차단 | 외부 공개·LLM 전송 전 |
+| `STRICT` | MEDIUM 이상 차단 | 실무 표준 |
+| `BALANCED` | HIGH 이상 차단 | 내부 협업 |
+| `PERMISSIVE` | CRITICAL 만 차단 | 분석가 작업 |
+| `AUDIT` | 차단 없음, 검출만 보고 | 감사·통계 |
 
-### Phase 3 — 컨텍스트 기반 이름 탐지 ✅
+**전략 (Strategy)** — 차단된 값을 *어떻게 바꿀지* 선택.
+| 전략 | `880101-1234568` → | 가역 |
+|---|---|---|
+| `tokenize` | `<RRN_1>` | ✓ Vault 로 복원 |
+| `redact` | `[주민등록번호]` | ✗ |
+| `asterisk` | `**************` | ✗ |
+| `partial` | `880101-1******` | ✗ (실무 양식) |
+| `hashed` | `<RRN:abc123>` | ✗ |
+| `fpe` | `771202-2345671` | ✗ (형식 유지) |
 
-종합 사전 (공개데이터 출처):
-- **성씨** 286개 (통계청 「인구주택총조사」 기준 + 복성)
-- **직책 사전** — 일반직 1~9급 (관리관/이사관/사무관/주사 등) + 특정직 전직군
-  - 경찰 11계급 (치안총감~순경)
-  - 소방 11계급 (소방총감~소방사)
-  - 군 19계급 (원수~이병)
-  - 검사·법관·외무공무원
-- **부처 사전** — 정부조직법 기준 19부 6처 18청 6위원회 + 2026 개편 신설/개명
-  - 약칭 매핑 (한글: 기재부/행안부, 영문: MOEF/MOIS, KASA, OKA 등)
-- **행정구역 사전** — 17 광역 + 226 기초자치단체 (75자치시·82자치군·69자치구)
-- **필드 라벨** — 공문서 양식 (성명/신청인/피의자/수사관/신고자 등)
-- **조사 처리** + **누적 사전** (한 문서 내 이름 재인식)
+**Phase (개발 단계 — 사용자와 무관)** — 라이브러리 개발 history. v1 출시 후
+모든 phase 가 완료된 상태라 일반 사용자는 신경 쓸 필요 없음. [CHANGELOG.md](CHANGELOG.md)
+에서 발전 과정 확인 가능.
 
-### Phase 5 — Vault + 처리 모드 ✅
+## 지원 PII 카테고리 (24종)
 
-- `ReversibleVault` — 가역 가명화 저장소 (JSON schema v1, salted SHA-256 fingerprint)
-- `tokenize` / `redact` / `hashed` — 3가지 치환 전략
-- `generalization/{age,date,address,occupation}` — 일반화 (구간화·상위 행정구역·범주)
+### 결정적 (체크섬·화이트리스트 검증)
+| 카테고리 | 검증 방식 | 위험도 |
+|---|---|---|
+| 주민등록번호 (RRN) | 날짜 + 한국 RRN 체크섬 | CRITICAL |
+| 외국인등록번호 (FRN) | 날짜 + gender 5-8 + 체크섬 | CRITICAL |
+| 사업자등록번호 | 국세청 가중합 체크섬 (10자리) | LOW |
+| 법인등록번호 | 법인 체크섬 (13자리, RRN 우선) | MEDIUM |
+| 운전면허번호 | 지방청 코드 11-28 화이트리스트 | HIGH |
+| 여권번호 | prefix 화이트리스트 + 8자리 | CRITICAL |
+| 신용카드 | BIN 화이트리스트 + Luhn | CRITICAL |
+| 필지고유번호 (PNU) | 시·도 코드 + 본번 placeholder 거부 | LOW |
 
-### Phase 6 — 통합 API + 정책 + 리포팅 + CLI ✅
+### 키워드 anchor (키워드 + 형식 모두 필요)
+| 카테고리 | 키워드 | 위험도 |
+|---|---|---|
+| 건강보험증번호 | "건강보험/의료보험/보험증" (25자 윈도우) | HIGH |
+| 처방번호 | "처방번호/처방전/Rx/교부번호" | HIGH |
+| 의약품 코드 (EDI_DRUG) | "약품코드/주성분코드/KD코드" + 한국 국가코드 | LOW |
+| 팩스번호 | "팩스/FAX/fax/Fax" (12자 윈도우) | LOW |
+| 계좌번호 | "계좌" | HIGH |
+| 사번 (EMPLOYEE_ID) | "사번/공무원번호/직원번호/임용번호" + tight anchor | MEDIUM |
+| 민원번호 (PETITION_ID) | "민원/청구/정보공개/행정심판" | LOW |
+| 사건번호 (COURT_CASE) | 사건유형 (가합/고합/구합/헌가 등 한글) | MEDIUM |
 
-- `ProcessingMode` — PARANOID / STRICT / BALANCED / PERMISSIVE / AUDIT
-- `Anonymizer` 통합 클래스 — 검출 → 정책 결정 → 처리 (BLOCK / REVIEW / ALLOW)
-- `legal/mapping.py` — 카테고리 ↔ 법조항 단일 매핑
-- `reporting/{summary,certificate}.py` — 처리 요약 + 감사 증명서
-- `k-pii` CLI — `k-pii input.txt --mode STRICT --strategy tokenize --vault vault.json`
+### 형식 (prefix/사전 매핑)
+| 카테고리 | 검증 | 위험도 |
+|---|---|---|
+| 전화번호 | 통신사·지역번호 prefix (010-019 모바일 / 02 / 031-064 지방 / 070 VoIP / `+82`,`0082` 국제) | HIGH (모바일) / MEDIUM (유선) |
+| 이메일 | RFC 5322 실용 부분집합 | MEDIUM |
+| IP 주소 | IPv4 옥텟 0-255 / IPv6 RFC 4291 | MEDIUM |
+| URL | http(s)/ftp 표준 형식 | INFO |
+| 우편번호 | 시·도 첫자리 매핑 (5자리 신/6자리 레거시) | LOW |
+| 차량번호 | 신형 NN(N)[가-힣]NNNN + 용도 한글 화이트리스트 | MEDIUM |
+| 공문서번호 (DOC_ID) | 부처명 + 형식 | LOW |
 
-### Phase 4 — 도메인 특화 룰 ✅ 베이스라인
+### 사전·휴리스틱
+| 카테고리 | 검증 | 위험도 |
+|---|---|---|
+| 인명 (PERSON) | 성씨 286 + 직책 인접 + 호칭 거부 + 행정구역 거부 + 3중 매크로 (기관+이름+직급) | HIGH |
+| 주소 (ADDRESS) | 도로명/지번 + (광역+시·군·구) 조합 검증 | MEDIUM |
 
-- `domain/government.py` — 정부 문서번호 (DOC_ID)
-- `domain/civil_petition.py` — 민원·정보공개 번호 (PETITION_ID)
-- `domain/hr.py` — 사번·공무원번호·직원번호·임용번호 (EMPLOYEE_ID, tight anchor)
+> **사전 (Dictionaries)** — 외부 ML 없이 한국 도메인 fit:
+> - 성씨 286개 (통계청 「인구주택총조사」)
+> - 부처 19부 6처 18청 6위원회 (정부조직법 2026 개편 반영) + 한글/영문 약칭
+> - 직책 — 일반직 1-9급 + 경찰 11계급 + 소방 11계급 + 군 19계급 + 검사·법관·외무
+> - 행정구역 — 17 광역 + 226 기초자치단체 (75 자치시 + 82 자치군 + 69 자치구)
+> - 필드 라벨 (성명/신청인/피의자/수사관 등)
 
-### Phase 7 — 평가 + 문서화 ✅ 베이스라인
+## 기능 한눈에
 
-- `eval/synth.py` — 합성 공문서 생성기 (6 템플릿, Faker 불사용)
-- `eval/metrics.py` — Precision/Recall/F1 (partial/strict 매칭)
-- `eval/benchmark.py` — `python -m k_pii.eval.benchmark -n 60` 으로 즉시 평가
-- `docs/{legal_mapping,risk_levels,coverage}.md` — 법조항·위험도·커버리지 문서
+**처리 모드 × 전략 매트릭스** — `Anonymizer(mode=PARANOID, strategy="partial")`
+처럼 조합. 5 모드 × 6 전략 = 30 조합.
 
-### Phase 11 — 외부 통합 ✅ (옵셔널)
+**입력 호환성** — `.hwp` / `.hwpx` / `.docx` / `.xlsx` / `.csv` / `.pdf` / `.txt`
+자동 디스패처. CSV/XLSX 는 헤더 자동 매핑 (성명→PERSON, 주민번호→RRN 등 80+ 변형).
 
-**OpenAI Privacy Filter** + **Microsoft Presidio** + **MCP 서버** — 모두 optional:
+**보안** (개인정보보호법 제29조 안전조치의무)
+- Vault AES-256-GCM 암호화 + PBKDF2 (480k iter) — `[security]` extras
+- 모든 `vault.reveal()` / `store()` 호출 감사 로그 (JSONL)
 
-```python
-# 1) OpenAI Privacy Filter (hybrid, [ml] extras)
-from k_pii import Anonymizer, get_privacy_filter_adapter
-pf = get_privacy_filter_adapter(device="cpu")
-anon = Anonymizer(secondary_detector=pf, merge_mode="union")
+**배치·검토 워크플로우**
+- 디렉토리·glob 일괄: `k-pii ./docs/ --batch --workers 4`
+- REVIEW 큐 — 사람이 OK/FP/FN 마킹 → FP 누적 시 `common_words` 자동 추천
+- 단일 파일 HTML 리포트 (색상 코딩 + 인터랙티브 마킹)
 
-# 2) Microsoft Presidio plugin ([presidio] extras)
-from presidio_analyzer import AnalyzerEngine
-from k_pii.integrations.presidio_plugin import KPiiRecognizer
-analyzer = AnalyzerEngine()
-analyzer.registry.add_recognizer(KPiiRecognizer())  # 22개 한국 라벨 자동 추가
+**결합 위험도 + k-익명성** — 「비식별 조치 가이드라인」 직접 대응
+- `analytics/combined_risk.py` — 식별자/준식별자/민감속성 분류 + 조합 자동 평가
+- `analytics/k_anonymity.py` — k-익명성 평가 (threshold 기본 5) + 일반화 제안
 
-# 3) MCP 서버 — Claude Desktop 등 LLM 도구로 노출 ([mcp] extras)
-# claude_desktop_config.json:
-# {"mcpServers": {"k-pii": {"command": "k-pii-mcp-server"}}}
-```
+**표기 변형 매칭**
+- 한자 → 한글 (`hanja_to_hangul("洪吉童")` → `"홍길동"`)
+- Revised Romanization (`romanize_name("홍길동")` → `"Hong Gildong"`)
 
-가이드:
+**외부 통합** (모두 옵셔널, 코어와 분리)
+- OpenAI Privacy Filter — `[ml]` extras
+- Microsoft Presidio plugin — `[presidio]` extras
+- MCP 서버 (Claude Desktop) — `[mcp]` extras
+
+자세한 가이드:
 - [`docs/integration_openai_privacy_filter.md`](docs/integration_openai_privacy_filter.md)
 - [`docs/integration_presidio.md`](docs/integration_presidio.md)
 - [`docs/integration_mcp.md`](docs/integration_mcp.md)
 
-### 빠른 시작 / 예제
-
-`examples/` 디렉토리 — 15개 실행 가능 스크립트:
-
-| | |
-|---|---|
-| `01_basic_anonymize.py` | 기본 가명화 |
-| `13_llm_safe_filter.py` | **LLM 호출 전 PII 필터** (가장 핫한 use case) |
-| `14_hybrid_with_privacy_filter.py` | OpenAI Privacy Filter 연계 |
-| `15_presidio_integration.py` | Microsoft Presidio plugin |
-
-전체 목록: [`examples/README.md`](examples/README.md)
-
-### Phase 10 — 솔루션 인프라 ✅
-
-**입력 호환성:**
-- `.hwp` (한컴 5.x OLE — `olefile` 외부 deps) + 기존 `.hwpx`
-- `.pdf` (텍스트 레이어 — `pypdf` 외부 deps)
-- **표 컬럼-단위 처리** — `k_pii.tabular.anonymize_records()` — CSV/XLSX 헤더
-  자동 매핑 (성명→PERSON, 주민번호→RRN 등 80+ 헤더 변형)
-
-**보안 (개인정보보호법 제29조 안전조치의무):**
-- **Vault 암호화** — AES-256-GCM + PBKDF2 (480k iter). `cryptography` 외부 deps
-- **감사 로그** — 모든 `vault.reveal()` / `store()` 호출 JSONL 기록
-- CLI: `--vault-password` 또는 환경변수 `$KPII_VAULT_PASSWORD`, `--audit-log`
-
-**배치 처리:**
-- 디렉토리·glob 일괄 처리 (`k-pii ./docs/ --batch --workers 4`)
-- 진행률·실패 보고 + 부분 성공 처리
-
-**사람 검토 워크플로우:**
-- **검토 큐** (`k_pii.review`) — REVIEW 항목 영구 저장 + OK/FP/FN 마킹
-- **피드백 학습** — FP 마킹 누적 → `common_words` 자동 추천 (수동 반영)
-- **HTML 리포트** — 단일 파일, 색상 코딩 + 인터랙티브 마킹 다운로드
-
-**표기 변형 매칭:**
-- 한자 → 한글 (`hanja_to_hangul("洪吉童")` → `"홍길동"`)
-- Revised Romanization (`romanize_name("홍길동")` → `"Hong Gildong"`)
-- 변형 후보 8종 자동 생성 (성-이름 분리, 하이픈, 대소문자 등)
-
-### Phase 9 — 파일 입력 + 부분 마스킹/FPE + 식의약·법조 도메인 ✅
-
-**파일 입력 (io_/ — 표준 라이브러리만):**
-- `.hwpx` (한컴 OWPML), `.docx`, `.xlsx`, `.csv`/`.tsv`, `.txt`/`.md`
-- 확장자 자동 디스패처: `from k_pii.io_ import read_text`
-
-**처리 전략 확장 (6종):**
-- `tokenize` — `<RRN_1>` 가역 토큰
-- `redact` — `[주민등록번호]` 비가역 라벨
-- `asterisk` — `**************` 길이 보존
-- `hashed` — `<RRN:abc123>` 단방향 해시
-- **`partial`** — `880101-1******` / `홍OO` / `010-****-5678` 등 부분 마스킹 (실무 공문서 양식)
-- **`fpe`** — `880101-1234568` → `771202-2345671` 형식 보존 (자릿수·하이픈·체크섬 일관성)
-
-**식의약·법조 도메인 추가 PII:**
-- `EDI_DRUG` — 식약처 의약품 표준코드 (9/13자리, 키워드 anchor)
-- `COURT_CASE` — 법원 사건번호 (`2024가합12345`)
-
-### Phase 8 — 결합 위험도 + k-익명성 ✅
-
-「개인정보 비식별 조치 가이드라인」 직접 대응:
-
-- `analytics/combined_risk.py` — 식별자/준식별자/민감속성 분류 + 조합 위험도
-  자동 계산. ``Anonymizer`` 결과의 `combined_risk` 에 자동 부착.
-- `analytics/k_anonymity.py` — k-익명성 평가 + 일반화 제안 (threshold 기본 5)
-- 추가 PII: **PNU** (필지고유번호 19자리, 결정적)
+**평가**
+- 합성 코퍼스 480 문서 micro F1 = **1.000** (8 seeds 일관)
+- KLUE-NER 한국 인명만 F1 = **0.338** (외부 자연어 검증)
+- `python -m k_pii.eval.benchmark -n 60 --seed 0` 으로 즉시 재현
 
 ```python
 from k_pii import Anonymizer, ProcessingMode, k_anonymity
@@ -211,11 +176,6 @@ from k_pii import Anonymizer, ProcessingMode, k_anonymity
 result = Anonymizer(mode=ProcessingMode.STRICT).process(text)
 print(result.combined_risk.combined_risk)       # → RiskLevel.CRITICAL
 print(result.combined_risk.rationale)            # → ["식별자 RRN 등장 → 즉시 식별 가능"]
-
-# 데이터셋 단위 k-익명성 평가
-records = [{"PERSON": "<PERSON_1>", "ADDRESS": "<ADDRESS_1>"} for _ in range(7)]
-report = k_anonymity(records, threshold=5)
-print(report.k, report.satisfies_threshold)      # → 7, True
 ```
 
 ## 검출 샘플 — 무엇이 잡히고 무엇이 안 잡히는가
@@ -265,7 +225,7 @@ print(report.k, report.satisfies_threshold)      # → 7, True
 ✗ 5555-5555-5555-5555             (BIN OK, Luhn 실패)
 ```
 
-**DRIVER_LICENSE (운전면허)** — 지방청 코드 11~28 화이트리스트
+**DRIVER_LICENSE (운전면허)** — 지방청 코드 11-28 화이트리스트
 ```
 ✓ 11-90-123456-78                 (서울청 11)
 ✓ 운전면허 119012345678            (키워드 + 하이픈 없음)
@@ -324,13 +284,13 @@ print(report.k, report.satisfies_threshold)      # → 7, True
 
 **POSTAL_CODE** — 시·도 첫자리 매핑
 ```
-✓ 우편번호 03187                  (서울 01~08)
-✓ 우편번호 13520                  (경기 10~18)
+✓ 우편번호 03187                  (서울 01-08)
+✓ 우편번호 13520                  (경기 10-18)
 ✗ 우편번호 09999                  (09 = 시·도 미할당)
 ✗ 우편번호 99000                  (99 = 미할당)
 ```
 
-**IP** — IPv4 옥텟 0~255 검증, IPv6 RFC 4291
+**IP** — IPv4 옥텟 0-255 검증, IPv6 RFC 4291
 ```
 ✓ 192.168.1.100                   (IPv4 사설)
 ✓ 2001:db8::1                     (IPv6 단축)
@@ -508,7 +468,7 @@ python -m venv .venv
 .venv/Scripts/activate    # Windows
 pip install -e ".[dev,file,security]"
 pytest -v
-# 597 passed in ~1.8s
+# 659 passed in 2초
 python -m k_pii.eval.benchmark -n 60 --seed 0
 # 합성 코퍼스에서 라벨별 P/R/F1 출력 (현재 모든 라벨 F1=1.000)
 
@@ -531,6 +491,6 @@ Apache License 2.0.
 
 ## 법적 참고 문서
 
-- 개인정보보호법 (특히 제23조 민감정보, 제24조 고유식별정보, 제28조의2~5 가명정보 특례)
+- 개인정보보호법 (특히 제23조 민감정보, 제24조 고유식별정보, 제28조의2-5 가명정보 특례)
 - 개인정보보호위원회 「가명정보 처리 가이드라인」
 - 개인정보보호위원회 「개인정보 비식별 조치 가이드라인」
