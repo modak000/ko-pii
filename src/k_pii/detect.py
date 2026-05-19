@@ -10,6 +10,7 @@ from k_pii.domain import hr as _dom_hr
 from k_pii.patterns import (
     account,
     address,
+    birth,
     business_reg,
     card,
     corp_reg,
@@ -23,6 +24,7 @@ from k_pii.patterns import (
     medical_insurance,
     passport,
     person,
+    personal_attr,
     phone,
     pnu,
     postal_code,
@@ -53,10 +55,13 @@ DETECTORS = (
     address.detect,
     account.detect,
     person.detect,
-    # 식의약·법조 도메인 (Phase 9)
+    # 식의약·법조 도메인
     edi_drug.detect,
     court_case.detect,
-    # Domain-specific (Phase 4)
+    # 인적 속성 (준식별자) — 학력·전공·직책·측정치 + 생년월일
+    birth.detect,
+    personal_attr.detect,
+    # Domain-specific
     _dom_gov.detect,
     _dom_petition.detect,
     _dom_hr.detect,

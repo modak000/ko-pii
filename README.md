@@ -2,13 +2,13 @@
 
 [![Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-659%20passed-brightgreen.svg)](#)
+[![Tests](https://img.shields.io/badge/tests-699%20passed-brightgreen.svg)](#)
 [![Korean PII](https://img.shields.io/badge/도메인-한국%20공공-red.svg)](#)
 
 한국 공공 부문 문서를 위한 규칙 기반 개인정보(PII) 비식별 라이브러리. **외부 ML 없이** 룰만으로 production-ready.
 
 > **상태:** v1.0.0 release-ready — **한국 공공 PII 솔루션**.
-> 24 PII + 6 처리 전략 + HWP/PDF/표 입력 + Vault 암호화 + 감사 로그 + 배치 + 검토 큐 + HTML 리포트 + 한자/로마자 + **OpenAI Privacy Filter / Presidio / MCP 옵셔널 연계**.
+> 31 PII (KDPII 표준 준식별자 포함) + 6 처리 전략 + HWP/PDF/표 입력 + Vault 암호화 + 감사 로그 + 배치 + 검토 큐 + HTML 리포트 + 한자/로마자 + **OpenAI Privacy Filter / Presidio / MCP 옵셔널 연계**.
 > 합성 코퍼스 480문서 micro F1 = 1.000 / KLUE-NER Korean-only F1 = 0.338.
 > **코어 deps 0개**. 입력·보안·ML·Presidio·MCP 기능은 모두 extras 로 분리.
 
@@ -80,7 +80,7 @@ pip install k-pii[all]                  # 모든 옵션
 모든 phase 가 완료된 상태라 일반 사용자는 신경 쓸 필요 없음. [CHANGELOG.md](CHANGELOG.md)
 에서 발전 과정 확인 가능.
 
-## 지원 PII 카테고리 (24종)
+## 지원 PII 카테고리 (31종)
 
 ### 결정적 (체크섬·화이트리스트 검증)
 | 카테고리 | 검증 방식 | 위험도 |
@@ -122,6 +122,23 @@ pip install k-pii[all]                  # 모든 옵션
 |---|---|---|
 | 인명 (PERSON) | 성씨 286 + 직책 인접 + 호칭 거부 + 행정구역 거부 + 3중 매크로 (기관+이름+직급) | HIGH |
 | 주소 (ADDRESS) | 도로명/지번 + (광역+시·군·구) 조합 검증 | MEDIUM |
+| 학력 (EDUCATION) | 대학교/전문대 사전 ~330개 + 약칭 매핑 | MEDIUM |
+| 전공 (MAJOR) | KEDI 학과 분류 ~250개 + 접미사 정규화 (학과/학부/전공/학) | LOW |
+| 직책 (POSITION) | titles 사전 200+ (정부·경찰·소방·군·외무·검사·법관) + 키워드 anchor | LOW |
+
+### 인적 속성 (KDPII 표준 준식별자 — 결합 시 식별 위험)
+| 카테고리 | 검증 | 위험도 |
+|---|---|---|
+| 생년월일 (DT_BIRTH) | 날짜 유효성 + 키워드 anchor ("생년월일/생일/출생/년생") | HIGH |
+| 나이 (AGE) | "32세/32살" 0-150 범위 | INFO |
+| 신장 (HEIGHT) | "175cm/175센티/1.75m" 50-250cm | INFO |
+| 체중 (WEIGHT) | "70kg/70킬로" 1-300kg | INFO |
+
+> **준식별자 (Quasi-Identifier)** — 단독으로는 식별 불가지만 다른 정보와
+> 결합 시 재식별 위험. k-pii 의 `analytics/combined_risk.py` + `k_anonymity`
+> 가 quasi-identifier 조합 자동 평가.
+> 분류 출처: 「개인정보 비식별 조치 가이드라인」 + KDPII 분류 (Li Fei et al.,
+> IEEE Access 2024).
 
 > **사전 (Dictionaries)** — 외부 ML 없이 한국 도메인 fit:
 > - 성씨 286개 (통계청 「인구주택총조사」)

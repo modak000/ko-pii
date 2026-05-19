@@ -49,6 +49,14 @@ _LABEL_TO_CLASS: dict[str, AttributeClass] = {
     "VEHICLE": AttributeClass.QUASI_IDENTIFIER,
     "EMPLOYEE_ID": AttributeClass.QUASI_IDENTIFIER,
     "IP": AttributeClass.QUASI_IDENTIFIER,
+    # 인적 속성 (KDPII 준식별자)
+    "DT_BIRTH": AttributeClass.QUASI_IDENTIFIER,
+    "EDUCATION": AttributeClass.QUASI_IDENTIFIER,
+    "MAJOR": AttributeClass.QUASI_IDENTIFIER,
+    "POSITION": AttributeClass.QUASI_IDENTIFIER,
+    "AGE": AttributeClass.QUASI_IDENTIFIER,
+    "HEIGHT": AttributeClass.QUASI_IDENTIFIER,
+    "WEIGHT": AttributeClass.QUASI_IDENTIFIER,
     # 민감속성 (보호 대상)
     "MEDICAL_INSURANCE": AttributeClass.SENSITIVE,
     "PRESCRIPTION_ID": AttributeClass.SENSITIVE,

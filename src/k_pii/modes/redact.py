@@ -38,6 +38,13 @@ _LABEL_TO_HANGUL: dict[str, str] = {
     "PNU": "토지번호",
     "PRESCRIPTION_ID": "처방번호",
     "EDI_DRUG": "약품코드",
+    "DT_BIRTH": "생년월일",
+    "EDUCATION": "학력",
+    "MAJOR": "전공",
+    "POSITION": "직책",
+    "AGE": "나이",
+    "HEIGHT": "신장",
+    "WEIGHT": "체중",
     "COURT_CASE": "사건번호",
 }
 
