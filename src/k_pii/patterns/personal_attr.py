@@ -29,35 +29,61 @@ LEGAL_BASIS = "개인정보보호법 제2조"
 # ═══════════════════════════════════════════════════════════════════════
 # EDUCATION (학력)
 # ═══════════════════════════════════════════════════════════════════════
+# 대학교 정식명: 2-15자 + (대학교/대학/대학원/전문대학/대학원대학교)
+# 약칭: 2-5자 + 대 (서울대/연대/고대 등) — 사전 매칭 필수
+# 외국어 약칭: KAIST/POSTECH/UNIST/GIST/DGIST
+# 초중고: 2-10자 + (초/중/고/초등학교/중학교/고등학교)
 _EDUCATION_PATTERN = re.compile(
     r"(?<![가-힣A-Za-z])"
-    r"([가-힣]{2,15}(?:대학교|대학|대학원대학교|전문대학|대학원)|"
-    r"KAIST|POSTECH|UNIST|GIST|DGIST|"
-    r"카이스트|포스텍|유니스트|지스트|디지스트)"
-    r"(?![가-힣])"
+    r"(?P<full>[가-힣]{2,15}(?:대학교|대학원대학교|전문대학|대학원|대학)|"
+    r"(?P<abbrev>[가-힣]{2,5}대)|"
+    r"(?P<eng>KAIST|POSTECH|UNIST|GIST|DGIST)|"
+    r"(?P<kor>카이스트|포스텍|유니스트|지스트|디지스트)|"
+    r"(?P<elem>[가-힣]{2,10}초등학교|[가-힣]{1,8}초)|"
+    r"(?P<mid>[가-힣]{2,10}중학교|[가-힣]{1,8}중)|"
+    r"(?P<high>[가-힣]{2,10}고등학교|[가-힣]{1,8}고))"
+    r"(?![가-힣A-Za-z])"
 )
 
 
 def detect_education(text: str) -> Iterator[DetectionResult]:
     from k_pii.dictionaries.universities import (
-        ALL_UNIVERSITIES, UNIVERSITY_ABBREV, is_university, normalize_university,
+        is_university, normalize_university,
     )
     for m in _EDUCATION_PATTERN.finditer(text):
-        raw = m.group(1)
-        if not is_university(raw):
-            # 접미사 변형 ("대학교" 끝) 도 시도
+        raw = m.group(0)
+        # 약칭이면 사전 검증
+        if m.group("abbrev"):
+            if not is_university(raw):
+                continue
+            canonical = normalize_university(raw)
+            edu_type = "university_abbrev"
+        elif m.group("full") or m.group("eng") or m.group("kor"):
+            if not is_university(raw):
+                continue
+            canonical = normalize_university(raw)
+            edu_type = "university"
+        elif m.group("elem"):
+            canonical = raw
+            edu_type = "elementary_school"
+        elif m.group("mid"):
+            canonical = raw
+            edu_type = "middle_school"
+        elif m.group("high"):
+            canonical = raw
+            edu_type = "high_school"
+        else:
             continue
-        canonical = normalize_university(raw)
         yield DetectionResult(
             label="EDUCATION",
             text=raw,
-            start=m.start(1),
-            end=m.end(1),
+            start=m.start(),
+            end=m.end(),
             risk_level=RiskLevel.MEDIUM,
-            confidence=0.95,
-            evidence=["pattern:education", f"canonical:{canonical}"],
+            confidence=0.95 if edu_type.startswith("university") else 0.85,
+            evidence=["pattern:education", f"type:{edu_type}", f"canonical:{canonical}"],
             legal_basis=LEGAL_BASIS,
-            extra={"category": "준식별자", "canonical": canonical},
+            extra={"category": "준식별자", "canonical": canonical, "type": edu_type},
         )
 
 
@@ -119,9 +145,17 @@ def _position_anchor_before(text: str, start: int, window: int = 12) -> str | No
     return None
 
 
+_POSITION_HONORIFIC_PATTERN = re.compile(
+    r"(?<![가-힣A-Za-z])"
+    r"([가-힣]{1,6})님"
+    r"(?![가-힣A-Za-z])"
+)
+
+
 def detect_position(text: str) -> Iterator[DetectionResult]:
     from k_pii.dictionaries.titles import is_title, title_domain
     seen: set[tuple[int, int]] = set()
+    # 1) 키워드 anchor 모드 ("직급:/직책:/직위:")
     for m in _POSITION_PATTERN.finditer(text):
         raw = m.group(1)
         if not is_title(raw):
@@ -146,6 +180,30 @@ def detect_position(text: str) -> Iterator[DetectionResult]:
             extra={"category": "준식별자", "domain": domain},
         )
 
+    # 2) 호칭 모드 — "부장님", "사장님", "팀장님" 같이 "님" suffix 가 붙은 직급
+    #    KDPII 대화체에서 빈번 ("아 저 재무팀 김명진 과장님 만나러 왔는데요")
+    for m in _POSITION_HONORIFIC_PATTERN.finditer(text):
+        raw = m.group(1)
+        if not is_title(raw):
+            continue
+        span = (m.start(1), m.end(1))
+        # 호칭 자체 ("부장님") 보다는 직급 부분만 ("부장") emit
+        if any(span[0] < e and s < span[1] for s, e in seen):
+            continue
+        seen.add(span)
+        domain = title_domain(raw) or "unknown"
+        yield DetectionResult(
+            label="POSITION",
+            text=raw,
+            start=span[0],
+            end=span[1],
+            risk_level=RiskLevel.LOW,
+            confidence=0.8,
+            evidence=["pattern:position_honorific", f"domain:{domain}"],
+            legal_basis=LEGAL_BASIS,
+            extra={"category": "준식별자", "domain": domain, "honorific": True},
+        )
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # AGE / HEIGHT / WEIGHT (측정치)
@@ -154,7 +212,26 @@ _AGE_PATTERN = re.compile(
     r"(?<![0-9])"
     r"(\d{1,3})"
     r"\s*(?:세|살)"
-    r"(?![가-힣])"
+    r"(?=[은는이가도만에으로의을를과와요예니다,.\s)\]\!\?]|$)"
+)
+
+# 한글 음역 — "서른두 살", "스물여섯 살", "마흔 다섯 살" 등
+_KOREAN_AGE_TENS = {
+    "열": 10, "스물": 20, "서른": 30, "마흔": 40, "쉰": 50,
+    "예순": 60, "일흔": 70, "여든": 80, "아흔": 90,
+}
+_KOREAN_AGE_ONES = {
+    "한": 1, "두": 2, "세": 3, "네": 4, "다섯": 5,
+    "여섯": 6, "일곱": 7, "여덟": 8, "아홉": 9,
+}
+_KOREAN_AGE_TWENTIES = {
+    "스무": 20,
+}
+_KOREAN_AGE_PATTERN = re.compile(
+    r"(?<![가-힣])"
+    r"(스무|"
+    r"(?:열|스물|서른|마흔|쉰|예순|일흔|여든|아흔)(?:\s*(?:한|두|세|네|다섯|여섯|일곱|여덟|아홉))?)"
+    r"\s*살"
 )
 
 _HEIGHT_PATTERN = re.compile(
@@ -181,18 +258,56 @@ _WEIGHT_PATTERN = re.compile(
 )
 
 
+def _parse_korean_age(token: str) -> int | None:
+    """'서른두', '스물여섯', '마흔다섯' 등을 숫자로 변환."""
+    if token in _KOREAN_AGE_TWENTIES:
+        return _KOREAN_AGE_TWENTIES[token]
+    # 분리
+    for tens_kor, tens_val in _KOREAN_AGE_TENS.items():
+        if token.startswith(tens_kor):
+            rest = token[len(tens_kor):].strip()
+            if not rest:
+                return tens_val
+            if rest in _KOREAN_AGE_ONES:
+                return tens_val + _KOREAN_AGE_ONES[rest]
+    return None
+
+
 def detect_measurements(text: str) -> Iterator[DetectionResult]:
+    seen_age: set[tuple[int, int]] = set()
     for m in _AGE_PATTERN.finditer(text):
         age = int(m.group(1))
         if 0 <= age <= 150:
+            span = (m.start(), m.end())
+            seen_age.add(span)
             yield DetectionResult(
                 label="AGE", text=m.group(0),
-                start=m.start(), end=m.end(),
+                start=span[0], end=span[1],
                 risk_level=RiskLevel.INFO, confidence=0.95,
                 evidence=["pattern:age", f"value:{age}"],
                 legal_basis=LEGAL_BASIS,
                 extra={"category": "준식별자", "value": age, "unit": "year"},
             )
+
+    # 한글 음역
+    for m in _KOREAN_AGE_PATTERN.finditer(text):
+        span = (m.start(), m.end())
+        if any(span[0] < e and s < span[1] for s, e in seen_age):
+            continue
+        token = m.group(1).strip()
+        age = _parse_korean_age(token)
+        if age is None or not (0 <= age <= 99):
+            continue
+        seen_age.add(span)
+        yield DetectionResult(
+            label="AGE", text=m.group(0),
+            start=span[0], end=span[1],
+            risk_level=RiskLevel.INFO, confidence=0.85,
+            evidence=["pattern:age_korean", f"value:{age}", f"token:{token}"],
+            legal_basis=LEGAL_BASIS,
+            extra={"category": "준식별자", "value": age, "unit": "year",
+                   "format": "korean"},
+        )
 
     for m in _HEIGHT_PATTERN.finditer(text):
         height = float(m.group(1))

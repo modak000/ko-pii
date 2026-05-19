@@ -102,6 +102,58 @@ def _has_birth_marker_after(text: str, end: int) -> bool:
     return tail.startswith("생")
 
 
+# 풀네임 인접 정규식 — 한국 성씨 + 1-3자 이름 (간략판)
+_PERSON_NEAR_PATTERN = re.compile(
+    r"[가-힣]{2,4}"
+    r"(?:이에요|이라|입니다|이고|이며|이요|예요|이니|입니다\.|이|는|은|가|와|과)?"
+)
+
+
+# 한국어 조사·동사 활용 종결 — 풀네임 끝 글자가 이걸로 끝나면 일반 어휘
+_PARTICLES = frozenset("는은이가도을를의에로와과만")
+_VERB_ENDINGS = frozenset("다네요지까려면고잖야아어라사세")  # 동사·형용사 활용
+
+# 이름 끝에 잘 안 오는 글자 (안전망)
+_NON_NAME_FINAL = _PARTICLES | _VERB_ENDINGS
+
+
+def _has_person_context_nearby(text: str, start: int, end: int, window: int = 15) -> bool:
+    """매치 *주변* 15자 윈도우에 *풀네임 인명* 패턴이 있는지.
+
+    조건:
+      1) 정확히 3-4자 한글 토큰
+      2) 첫 글자가 성씨
+      3) 마지막 글자가 조사 (는/은/이/가/도/...) 가 *아님* — "회의는" 거부
+      4) common_word·title 아님
+
+    "이계용, 88년 7월 4일" → "이계용" = "용" (조사 X) → True
+    "96년 7월 29일 조윤경" → "조윤경" → True
+    "회의는 2024년 4월 15일" → "회의는" → "는" 조사 → False
+    """
+    from k_pii.dictionaries.surnames import surname_prefix_len
+    from k_pii.dictionaries.common_words import is_common_word
+    from k_pii.dictionaries.titles import is_title
+    head = text[max(0, start - window): start]
+    tail = text[end: end + window]
+    for chunk in (head, tail):
+        for m in re.finditer(r"(?<![가-힣])([가-힣]{3,4})(?![가-힣])", chunk):
+            token = m.group(1)
+            if surname_prefix_len(token) == 0:
+                continue
+            if token[-1] in _NON_NAME_FINAL:  # 조사·동사 활용 어미 = 일반 단어
+                continue
+            # 추가 안전망: 토큰 중 *중간* 글자에 흔한 한자어 음절 ('율/론/론/도/책' 등)
+            # 이 들어 있으면 이름이라기보다 일반어. 단순화: 토큰의 이름끝 음절 사전
+            # (name_final) 확인.
+            from k_pii.patterns.person import _NAME_FINAL_SYLLABLES
+            if token[-1] not in _NAME_FINAL_SYLLABLES:
+                continue
+            if is_common_word(token) or is_title(token):
+                continue
+            return True
+    return False
+
+
 def detect(text: str) -> Iterator[DetectionResult]:
     seen: set[tuple[int, int]] = set()
 
@@ -115,7 +167,10 @@ def detect(text: str) -> Iterator[DetectionResult]:
         if not _valid_date(year, month, day):
             continue
         kw = _has_keyword_before(text, m.start())
-        if kw is None and not _has_birth_marker_after(text, m.end()):
+        # context anchor 완화: 키워드 없어도 (a) "년생" marker (b) 풀네임 인접 OK
+        has_marker = _has_birth_marker_after(text, m.end())
+        has_name_ctx = _has_person_context_nearby(text, m.start(), m.end())
+        if kw is None and not has_marker and not has_name_ctx:
             continue  # 단순 날짜 (회의·작성일 등) — 거부
         span = (m.start(), m.end())
         seen.add(span)
@@ -150,8 +205,9 @@ def detect(text: str) -> Iterator[DetectionResult]:
         if not _valid_date(year, month, day):
             continue
         kw = _has_keyword_before(text, m.start())
-        if kw is None:
-            continue  # 숫자 날짜는 키워드 anchor 필수
+        # 숫자 날짜: 키워드 또는 풀네임 인접 필요
+        if kw is None and not _has_person_context_nearby(text, m.start(), m.end()):
+            continue
         seen.add(span)
         yield DetectionResult(
             label=LABEL,
