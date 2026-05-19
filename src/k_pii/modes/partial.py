@@ -178,6 +178,97 @@ def _mask_default(text: str) -> str:
     return text[:2] + MASK * (len(text) - 4) + text[-2:]
 
 
+def _mask_birth(text: str) -> str:
+    """생년월일: 연도만 노출, 월/일 마스킹.
+
+    1988년 1월 1일 → 1988년 **월 *일
+    1988-01-01     → 1988-**-**
+    88.01.01       → 88.**.**
+    88년생          → 그대로 (이미 연도만)
+    """
+    # "년생" 형태는 이미 연도만 → 그대로 두거나 마스킹 강도 낮음
+    if text.endswith("년생"):
+        return text
+    # 한국어: 1988년 X월 X일
+    m = re.match(r"^(\d{2,4})\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일$", text)
+    if m:
+        return f"{m.group(1)}년 {MASK*2}월 {MASK*2}일"
+    # 숫자 형식: 1988.01.01 / 1988-01-01 / 1988/01/01 / 88.01.01
+    m = re.match(r"^(\d{2,4})([./-])\d{1,2}\2\d{1,2}$", text)
+    if m:
+        sep = m.group(2)
+        return f"{m.group(1)}{sep}{MASK*2}{sep}{MASK*2}"
+    return MASK * len(text)
+
+
+def _mask_education(text: str) -> str:
+    """학력: 대학교명 → 'X대학교' (계열은 보존하지 않고 한글 X 로 치환).
+
+    서울대학교 → ○대학교
+    KAIST     → ○○○○○ (영문은 모두 가림)
+    """
+    # 한국어 대학교명: 첫 글자만 ○ 로 + "대학교/대학" 유지
+    for suf in ("대학원대학교", "전문대학", "대학교", "대학"):
+        if text.endswith(suf):
+            return "○" + suf
+    # 영문 약칭 (KAIST 등) → 전체 마스킹
+    return MASK * len(text)
+
+
+def _mask_major(text: str) -> str:
+    """전공: 계열까지만 노출.
+
+    컴퓨터공학과 → ○○○○학과
+    경영학       → ○○학
+    """
+    # 접미사 유지
+    for suf in ("학과", "학부", "전공", "학", "과"):
+        if text.endswith(suf) and len(text) > len(suf):
+            stem = text[: -len(suf)]
+            return ("○" * len(stem)) + suf
+    return MASK * len(text)
+
+
+def _mask_position(text: str) -> str:
+    """직책: 그대로 (이미 일반화된 직급)."""
+    return text
+
+
+def _mask_age(text: str) -> str:
+    """나이: 10세 단위 구간화. '32세' → '30대'."""
+    m = re.search(r"(\d+)", text)
+    if m:
+        age = int(m.group(1))
+        if age < 10:
+            return "10대 미만"
+        decade = (age // 10) * 10
+        return f"{decade}대"
+    return MASK * len(text)
+
+
+def _mask_height(text: str) -> str:
+    """신장: 5cm 구간화. '175cm' → '175~180cm'."""
+    m = re.search(r"(\d+(?:\.\d+)?)", text)
+    if m:
+        h = float(m.group(1))
+        # m 단위면 cm 로 변환
+        if h < 3:
+            h *= 100
+        lo = int(h // 5) * 5
+        return f"{lo}-{lo+5}cm"
+    return MASK * len(text)
+
+
+def _mask_weight(text: str) -> str:
+    """체중: 5kg 구간화. '70kg' → '70~75kg'."""
+    m = re.search(r"(\d+(?:\.\d+)?)", text)
+    if m:
+        w = float(m.group(1))
+        lo = int(w // 5) * 5
+        return f"{lo}-{lo+5}kg"
+    return MASK * len(text)
+
+
 _MASKERS: dict[str, Callable[[str], str]] = {
     "RRN": _mask_rrn,
     "FRN": _mask_rrn,
@@ -189,6 +280,14 @@ _MASKERS: dict[str, Callable[[str], str]] = {
     "ADDRESS": _mask_address,
     "ACCOUNT": _mask_account,
     "PASSPORT": _mask_passport,
+    # KDPII 표준 준식별자
+    "DT_BIRTH": _mask_birth,
+    "EDUCATION": _mask_education,
+    "MAJOR": _mask_major,
+    "POSITION": _mask_position,
+    "AGE": _mask_age,
+    "HEIGHT": _mask_height,
+    "WEIGHT": _mask_weight,
 }
 
 
