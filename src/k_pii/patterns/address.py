@@ -17,10 +17,18 @@ import re
 from typing import Iterator
 
 from k_pii.core.types import DetectionResult, RiskLevel
+from k_pii.dictionaries.districts import (
+    is_country, is_common_dong, is_extra_city,
+)
 
 LABEL = "ADDRESS"
 LEGAL_BASIS = "개인정보보호법 제2조"
 CATEGORY = "일반개인정보"
+
+# 단독 행정구역 토큰 — 합성어 부분 매칭 방지 (앞뒤 한글/영숫자 거부)
+_PATTERN_ADMIN_TOKEN = re.compile(
+    r"(?<![가-힣A-Za-z0-9])([가-힣]{2,6})(?![가-힣A-Za-z0-9])"
+)
 
 # 대화체 보강용 anchor — 강한 주거·접촉 정보 신호
 _LOOSE_ANCHORS = (
@@ -96,6 +104,7 @@ def detect(text: str) -> Iterator[DetectionResult]:
 
     from k_pii.dictionaries.districts import (
         is_province,
+        is_district,
         is_valid_province_district,
     )
 
@@ -206,6 +215,54 @@ def detect(text: str) -> Iterator[DetectionResult]:
             extra={
                 "format": "loose",
                 "first_token": first_token,
+                "category": CATEGORY,
+            },
+        )
+
+    # 4) 단독 행정구역 / 국가명 — anchor 필수 (대화체) + dict 매칭 (LOW risk)
+    # 다른 ADDRESS 매치와 인접 (50자 이내) 한 단독 행정구역은 같은 주소의
+    # 일부로 보고 emit 거부 (도로명/지번 매칭과 중복 방지)
+    ADMIN_ALONE_ADJACENCY = 50
+    for m in _PATTERN_ADMIN_TOKEN.finditer(text):
+        span = (m.start(), m.end())
+        if any(span[0] < e + ADMIN_ALONE_ADJACENCY and s - ADMIN_ALONE_ADJACENCY < span[1]
+               for s, e in seen):
+            continue
+        token = m.group(1)
+        kind = None
+        # 광역 (정식명·약칭·시 약칭)
+        if is_province(token) or token in {"강원도", "충청도", "전라도", "경상도", "제주도",
+                                            "서울시", "부산시", "대구시", "인천시",
+                                            "광주시", "대전시", "울산시"}:
+            kind = "province"
+        elif is_district(token):
+            kind = "district"
+        elif is_extra_city(token):
+            kind = "city"
+        elif is_common_dong(token):
+            kind = "dong"
+        elif is_country(token):
+            kind = "country"
+        else:
+            continue
+        # 대화체 anchor 필수 — 일반 문어체 "25개 자치구 방문" 같은 텍스트 거부
+        anchor = _has_loose_anchor(text, m.start(), m.end())
+        if anchor is None:
+            continue
+        seen.add(span)
+        yield DetectionResult(
+            label=LABEL,
+            text=token,
+            start=m.start(),
+            end=m.end(),
+            risk_level=RiskLevel.LOW,
+            confidence=0.7,
+            evidence=[f"pattern:admin_alone({kind})", f"dict:{kind}",
+                      f"anchor:{anchor}"],
+            legal_basis=LEGAL_BASIS,
+            extra={
+                "format": "admin_alone",
+                "admin_kind": kind,
                 "category": CATEGORY,
             },
         )

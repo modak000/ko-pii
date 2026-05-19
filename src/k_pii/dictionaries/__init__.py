@@ -22,8 +22,10 @@ from k_pii.dictionaries.districts import (
     PROVINCES, PROVINCE_ABBREV,
     SEOUL_DISTRICTS, METRO_DISTRICTS, ALL_CITIES_GUNS, ALL_DISTRICTS,
     PROVINCE_DISTRICTS,
+    COUNTRIES, EXTRA_CITY_ABBREV, COMMON_DONGS,
     is_province, is_district, is_admin_unit, normalize_province,
     is_valid_province_district, districts_of,
+    is_country, is_common_dong, is_extra_city,
 )
 from k_pii.dictionaries.agency_titles import (
     valid_titles_for, is_valid_agency_title, specialized_agencies_for,

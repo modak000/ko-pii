@@ -25,7 +25,9 @@ from k_pii.dictionaries.agencies import is_agency
 from k_pii.dictionaries.agency_abbrev import normalize_agency
 from k_pii.dictionaries.agency_titles import is_valid_agency_title
 from k_pii.dictionaries.common_words import is_common_word
-from k_pii.dictionaries.districts import is_district, is_province
+from k_pii.dictionaries.districts import (
+    is_country, is_common_dong, is_district, is_extra_city, is_province,
+)
 from k_pii.dictionaries.field_labels import is_field_label
 from k_pii.dictionaries.surnames import surname_prefix_len
 from k_pii.dictionaries.titles import is_title
@@ -359,6 +361,28 @@ def _detect_with_dict(
         # Skip tokens that are themselves dictionary words (field label,
         # title, agency) — those are infrastructure markers, not names.
         if is_field_label(stem) or is_title(stem) or is_agency(stem):
+            continue
+        # Skip 행정구역명·국가명 — LC_ADDRESS 영역이지 PERSON 아님
+        # (동대문구·화곡동·수원시·한국 등이 부분 매칭으로 PERSON 잡히는 것 차단)
+        if (is_province(stem) or is_district(stem) or is_country(stem)
+                or is_common_dong(stem) or is_extra_city(stem)):
+            continue
+        # Skip 학교명 (...대/...고/...중/...초 끝나는 토큰)
+        if len(stem) >= 3 and stem.endswith(("대", "고", "중", "초")):
+            # "연세대/숭실대/경남대/연세대학교/서울고/광주고" 같은 학교 토큰
+            # 단, 단순 2~3자 이름은 충돌 가능 — 4자+ 또는 명확한 학교명만
+            if stem.endswith(("대학교", "고등학교", "중학교", "초등학교")):
+                continue
+            if len(stem) >= 3 and stem[-1] in ("대", "고", "중", "초"):
+                # 끝 1자 약칭 — 흔한 학교 약칭 패턴 거부
+                if any(stem.endswith(f"{n}대") for n in ["연세", "고려", "서울",
+                       "한양", "중앙", "경희", "이화", "성균관", "한국", "숭실",
+                       "동국", "건국", "홍익", "단국", "국민", "세종", "경남",
+                       "경북", "전남", "전북", "충남", "충북", "부산", "인하",
+                       "아주", "한림", "가천", "을지", "차의", "차"]):
+                    continue
+        # Skip 은행명 (...은행 끝나는 토큰)
+        if stem.endswith("은행"):
             continue
         # Skip tokens that look like Korean verb/adjective conjugations.
         if _looks_like_verb_form(stem):

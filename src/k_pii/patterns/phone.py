@@ -69,6 +69,16 @@ _REGIONAL = re.compile(
     r"(?![0-9])"
 )
 
+# 대표번호 (15xx/16xx/17xx/18xx) — 8자리, 사업장/콜센터
+# KISA 번호자원관리 가이드: 1500-1899 대역
+_REPRESENTATIVE = re.compile(
+    r"(?<![0-9+])"
+    r"(1[5-8]\d{2})"
+    r"[-.\s]?"
+    r"(\d{4})"
+    r"(?![0-9])"
+)
+
 
 def _emit(m: re.Match, phone_type: str, international: bool = False) -> DetectionResult:
     digits = re.sub(r"\D", "", m.group(0))
@@ -137,3 +147,10 @@ def detect(text: str) -> Iterator[DetectionResult]:
             continue
         seen.add(span)
         yield _emit(m, "landline")
+
+    for m in _REPRESENTATIVE.finditer(text):
+        span = (m.start(), m.end())
+        if _overlaps(span, seen):
+            continue
+        seen.add(span)
+        yield _emit(m, "representative")
