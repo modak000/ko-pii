@@ -90,10 +90,29 @@ def detect_education(text: str) -> Iterator[DetectionResult]:
 # ═══════════════════════════════════════════════════════════════════════
 # MAJOR (전공)
 # ═══════════════════════════════════════════════════════════════════════
-# "컴퓨터공학과", "경영학부", "법학", "의예과" 등 — 짧은 전공 ("수학"·"법학") 도 허용
-_MAJOR_PATTERN = re.compile(
+# 명확한 학과/학부/전공 suffix — lookahead 없음 (조사 부착 "경영학과니까" 매칭).
+_MAJOR_PATTERN_LONG = re.compile(
     r"(?<![가-힣A-Za-z])"
-    r"([가-힣]{1,11}(?:학과|학부|전공|학|과))"
+    r"([가-힣]{1,11}(?:학과|학부|전공))"
+)
+
+# 짧은 학/과 suffix — 합성어 거부 위해 lookahead 유지 ("법학", "의예과").
+_MAJOR_PATTERN_SHORT = re.compile(
+    r"(?<![가-힣A-Za-z])"
+    r"([가-힣]{1,10}(?:학|과))"
+    r"(?![가-힣A-Za-z])"
+)
+
+# 단과대 약칭 — 의대/공대/미대/약대/법대/치대/한의대 등 (KDPII gold 빈출)
+_MAJOR_FACULTY_ABBREV: frozenset[str] = frozenset([
+    "의대", "치대", "한의대", "약대", "수의대",
+    "법대", "행정대", "경상대학",
+    "공대", "미대", "음대", "체대", "예대", "사범대",
+    "신학대", "농대", "건축대",
+])
+_MAJOR_FACULTY_PATTERN = re.compile(
+    r"(?<![가-힣A-Za-z])"
+    r"([가-힣]{2,4})"
     r"(?![가-힣A-Za-z])"
 )
 
@@ -101,7 +120,8 @@ _MAJOR_PATTERN = re.compile(
 def detect_major(text: str) -> Iterator[DetectionResult]:
     from k_pii.dictionaries.majors import is_major, normalize_major
     seen: set[tuple[int, int]] = set()
-    for m in _MAJOR_PATTERN.finditer(text):
+    # 1) 학과/학부/전공 suffix (lookahead 없음 — 조사 부착도 매칭)
+    for m in _MAJOR_PATTERN_LONG.finditer(text):
         raw = m.group(1)
         if not is_major(raw):
             continue
@@ -120,6 +140,47 @@ def detect_major(text: str) -> Iterator[DetectionResult]:
             evidence=["pattern:major", f"canonical:{canonical}"],
             legal_basis=LEGAL_BASIS,
             extra={"category": "준식별자", "canonical": canonical},
+        )
+    # 2) 짧은 학/과 suffix — "법학", "의예과", "수학" 등
+    for m in _MAJOR_PATTERN_SHORT.finditer(text):
+        raw = m.group(1)
+        if not is_major(raw):
+            continue
+        span = (m.start(1), m.end(1))
+        if any(span[0] < e and s < span[1] for s, e in seen):
+            continue
+        seen.add(span)
+        canonical = normalize_major(raw)
+        yield DetectionResult(
+            label="MAJOR",
+            text=raw,
+            start=span[0],
+            end=span[1],
+            risk_level=RiskLevel.LOW,
+            confidence=0.85,
+            evidence=["pattern:major_short", f"canonical:{canonical}"],
+            legal_basis=LEGAL_BASIS,
+            extra={"category": "준식별자", "canonical": canonical},
+        )
+    # 3) 단과대 약칭 — 의대/공대/미대/약대/법대 등 (KDPII gold MAJOR 로 라벨)
+    for m in _MAJOR_FACULTY_PATTERN.finditer(text):
+        raw = m.group(1)
+        if raw not in _MAJOR_FACULTY_ABBREV:
+            continue
+        span = (m.start(1), m.end(1))
+        if any(span[0] < e and s < span[1] for s, e in seen):
+            continue
+        seen.add(span)
+        yield DetectionResult(
+            label="MAJOR",
+            text=raw,
+            start=span[0],
+            end=span[1],
+            risk_level=RiskLevel.LOW,
+            confidence=0.8,
+            evidence=["pattern:major_faculty_abbrev"],
+            legal_basis=LEGAL_BASIS,
+            extra={"category": "준식별자", "canonical": raw, "kind": "faculty_abbrev"},
         )
 
 
@@ -203,6 +264,7 @@ def detect_position(text: str) -> Iterator[DetectionResult]:
             legal_basis=LEGAL_BASIS,
             extra={"category": "준식별자", "domain": domain, "honorific": True},
         )
+
 
 
 # ═══════════════════════════════════════════════════════════════════════

@@ -32,9 +32,10 @@ LABEL = "DT_BIRTH"
 LEGAL_BASIS = "개인정보보호법 제2조"
 CATEGORY = "준식별자"
 
-# 한국어 키워드 anchor — 25자 윈도우
+# 한국어 키워드 anchor — 25자 윈도우 (대화체 변형 포함)
 _KEYWORDS = (
-    "생년월일", "생일", "출생일", "출생", "태어난",
+    "생년월일", "생일", "출생일", "출생", "탄생",
+    "태어난", "태어났", "태어나",
     "DOB", "Date of Birth", "Birth Date", "birthday",
 )
 
@@ -133,11 +134,17 @@ def _has_person_context_nearby(text: str, start: int, end: int, window: int = 15
     from k_pii.dictionaries.surnames import surname_prefix_len
     from k_pii.dictionaries.common_words import is_common_word
     from k_pii.dictionaries.titles import is_title
+    from k_pii.context.particles import strip_trailing_particle
     head = text[max(0, start - window): start]
     tail = text[end: end + window]
     for chunk in (head, tail):
-        for m in re.finditer(r"(?<![가-힣])([가-힣]{3,4})(?![가-힣])", chunk):
-            token = m.group(1)
+        # 3~5자 한글 토큰 — 조사 stripping 까지 시도 (이하이가 → 이하이)
+        for m in re.finditer(r"(?<![가-힣])([가-힣]{3,5})(?![가-힣])", chunk):
+            raw = m.group(1)
+            # 조사 떨기 — 예: "이하이가" → ("이하이", "가")
+            token, _ = strip_trailing_particle(raw)
+            if len(token) < 2 or len(token) > 4:
+                continue
             if surname_prefix_len(token) == 0:
                 continue
             if token[-1] in _NON_NAME_FINAL:  # 조사·동사 활용 어미 = 일반 단어
