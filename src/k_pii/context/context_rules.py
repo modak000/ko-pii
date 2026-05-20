@@ -62,16 +62,32 @@ def _has_title_adjacent(text: str, start: int, end: int, window: int = 5) -> tup
 
     Checks both sides: "<title> <name>" and "<name> <title>". Korean
     particles attached to the title (e.g. "과장이", "과장은") are stripped
-    before lookup.
+    before lookup. Connective endings (e.g. "주임이며/주임이고") are
+    also stripped by checking title prefix.
     """
     from k_pii.context.particles import strip_trailing_particle
+
+    def _resolve_title(word: str) -> tuple[str | None, bool]:
+        """word → title 정식형 (조사·연결어미 제거 후 dict 매칭)."""
+        # 1차: 조사 strip 후 dict 매칭
+        stem, _ = strip_trailing_particle(word)
+        if is_title(stem):
+            return stem, is_gov_title(stem)
+        # 2차: 직책 dict 의 prefix 매칭 (조사·연결어미 부착 형식)
+        # "주임이며/주임이고/주임이라/사장님은" 같은 패턴 cover
+        # 가장 긴 매칭 우선 (4자 → 2자)
+        for plen in range(min(len(stem), 5), 1, -1):
+            prefix = stem[:plen]
+            if is_title(prefix):
+                return prefix, is_gov_title(prefix)
+        return None, False
 
     # After the candidate (most common: "홍길동 과장")
     tail = text[end: end + window + 6]
     for word in _word_iter(tail):
-        stem, _ = strip_trailing_particle(word)
-        if is_title(stem):
-            return stem, is_gov_title(stem)
+        title, gov = _resolve_title(word)
+        if title is not None:
+            return title, gov
         break  # only the first word counts as "adjacent"
 
     # Before the candidate (e.g., "과장 홍길동")
@@ -80,9 +96,9 @@ def _has_title_adjacent(text: str, start: int, end: int, window: int = 5) -> tup
     rev = head.rstrip()
     if rev:
         last = rev.split()[-1]
-        stem, _ = strip_trailing_particle(last)
-        if is_title(stem):
-            return stem, is_gov_title(stem)
+        title, gov = _resolve_title(last)
+        if title is not None:
+            return title, gov
     return None, False
 
 
