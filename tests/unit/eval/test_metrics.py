@@ -83,7 +83,7 @@ def test_format_report_contains_headers():
 
     rpt = score_corpus([doc], predict)
     out = format_report(rpt)
-    assert "Precision" in out
-    assert "Recall" in out
+    assert "정확도" in out  # 한국어 Precision
+    assert "재현율" in out  # 한국어 Recall
     assert "F1" in out
-    assert "(micro)" in out
+    assert "(전체)" in out  # 한국어 micro

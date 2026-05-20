@@ -130,8 +130,8 @@ def format_report(report: BenchmarkReport) -> str:
     lines.append(f"매칭 정책: {report.match_mode}")
     lines.append("")
     lines.append(
-        f"{'라벨':<22}{'TP':>5}{'FP':>5}{'FN':>5}"
-        f"{'Precision':>11}{'Recall':>9}{'F1':>8}"
+        f"{'라벨':<22}{'정탐':>5}{'오탐':>5}{'미탐':>5}"
+        f"{'정확도':>11}{'재현율':>9}{'F1':>8}"
     )
     lines.append("-" * 65)
     for label in sorted(report.per_label.keys()):
@@ -143,7 +143,7 @@ def format_report(report: BenchmarkReport) -> str:
     lines.append("-" * 65)
     micro = report.micro()
     lines.append(
-        f"{'(micro)':<22}{micro.tp:>5}{micro.fp:>5}{micro.fn:>5}"
+        f"{'(전체)':<22}{micro.tp:>5}{micro.fp:>5}{micro.fn:>5}"
         f"{micro.precision:>10.3f} {micro.recall:>8.3f}{micro.f1:>8.3f}"
     )
     lines.append(f"{'(macro F1)':<22}{'':>15}{'':>11}{'':>9}{report.macro_f1():>8.3f}")

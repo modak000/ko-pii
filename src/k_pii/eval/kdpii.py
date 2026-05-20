@@ -194,7 +194,7 @@ def format_kdpii_report(report: KdpiiReport) -> str:
     lines.append(f"라벨 매핑: {len(KDPII_LABEL_MAP)} KDPII → "
                  f"{len(set(KDPII_LABEL_MAP.values()))} k-pii LABEL")
     lines.append("")
-    lines.append(f"{'라벨':<15}{'TP':>6}{'FP':>6}{'FN':>6}{'P':>8}{'R':>8}{'F1':>8}")
+    lines.append(f"{'라벨':<15}{'정탐':>6}{'오탐':>6}{'미탐':>6}{'정확도':>8}{'재현율':>8}{'F1':>8}")
     lines.append("-" * 57)
     for lab in sorted(report.per_label):
         m = report.per_label[lab]
@@ -204,10 +204,14 @@ def format_kdpii_report(report: KdpiiReport) -> str:
         )
     lines.append("-" * 57)
     lines.append(
-        f"{'(micro)':<15}{report.micro_tp:>6}{report.micro_fp:>6}{report.micro_fn:>6}"
+        f"{'(전체)':<15}{report.micro_tp:>6}{report.micro_fp:>6}{report.micro_fn:>6}"
         f"{report.micro_precision:>8.3f}{report.micro_recall:>8.3f}"
         f"{report.micro_f1:>8.3f}"
     )
+    lines.append("")
+    lines.append("정탐 = 정확히 잡은 것 (gold 도 있음)")
+    lines.append("오탐 = 잘못 잡은 것 (gold 없는데 잡음)")
+    lines.append("미탐 = 놓친 것 (gold 있는데 못 잡음)")
     return "\n".join(lines)
 
 
