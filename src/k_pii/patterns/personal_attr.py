@@ -33,17 +33,32 @@ LEGAL_BASIS = "개인정보보호법 제2조"
 # 약칭: 2-5자 + 대 (서울대/연대/고대 등) — 사전 매칭 필수
 # 외국어 약칭: KAIST/POSTECH/UNIST/GIST/DGIST
 # 초중고: 2-10자 + (초/중/고/초등학교/중학교/고등학교)
+# 학교 검출 — alternation 별 named group, non-capturing outer
 _EDUCATION_PATTERN = re.compile(
     r"(?<![가-힣A-Za-z])"
-    r"(?P<full>[가-힣]{2,15}(?:대학교|대학원대학교|전문대학|대학원|대학)|"
-    r"(?P<abbrev>[가-힣]{1,5}대)|"  # 1자 prefix 허용 — "고대/홍대/이대/연대/성대"
+    r"(?:"
+    r"(?P<full>[가-힣]{2,15}(?:대학교|대학원대학교|전문대학|대학원|대학))|"
+    r"(?P<abbrev>[가-힣]{1,5}대)|"  # 1자 prefix 허용 — "고대/홍대/이대/연대"
     r"(?P<eng>KAIST|POSTECH|UNIST|GIST|DGIST)|"
     r"(?P<kor>카이스트|포스텍|유니스트|지스트|디지스트)|"
-    r"(?P<elem>[가-힣]{2,10}초등학교|[가-힣]{1,8}초)|"
-    r"(?P<mid>[가-힣]{2,10}중학교|[가-힣]{1,8}중)|"
-    r"(?P<high>[가-힣]{2,10}고등학교|[가-힣]{1,8}고))"
+    r"(?P<elem>[가-힣]{2,10}초등학교|[가-힣]{2,8}초)|"
+    r"(?P<mid>[가-힣]{2,10}중학교|[가-힣]{2,8}중)|"
+    r"(?P<high>[가-힣]{2,10}고등학교|[가-힣]{2,8}고)"
+    r")"
     r"(?![가-힣A-Za-z])"
 )
+
+
+_SCHOOL_ANCHORS = (
+    "졸업", "다녀", "다닌", "출신", "재학", "입학", "퇴학", "전학",
+    "모교", "동문", "동창",
+)
+
+
+def _has_school_anchor(text: str, start: int, end: int, window: int = 15) -> bool:
+    head = text[max(0, start - window): start]
+    tail = text[end: end + window]
+    return any(kw in head or kw in tail for kw in _SCHOOL_ANCHORS)
 
 
 def detect_education(text: str) -> Iterator[DetectionResult]:
@@ -64,14 +79,24 @@ def detect_education(text: str) -> Iterator[DetectionResult]:
             canonical = normalize_university(raw)
             edu_type = "university"
         elif m.group("elem"):
+            # 정식명 (X초등학교) 은 anchor 없이도 OK, 약칭 (X초) 은 anchor 필수
             canonical = raw
             edu_type = "elementary_school"
+            if raw.endswith("초") and not raw.endswith("초등학교"):
+                if not _has_school_anchor(text, m.start(), m.end()):
+                    continue
         elif m.group("mid"):
             canonical = raw
             edu_type = "middle_school"
+            if raw.endswith("중") and not raw.endswith("중학교"):
+                if not _has_school_anchor(text, m.start(), m.end()):
+                    continue
         elif m.group("high"):
             canonical = raw
             edu_type = "high_school"
+            if raw.endswith("고") and not raw.endswith("고등학교"):
+                if not _has_school_anchor(text, m.start(), m.end()):
+                    continue
         else:
             continue
         yield DetectionResult(
