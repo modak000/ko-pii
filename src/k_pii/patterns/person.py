@@ -113,6 +113,28 @@ _VERB_ENDINGS_FINAL: frozenset[str] = frozenset("다네요까잖면려")
 # "도/만/뿐" 등은 이름 끝 글자 충돌 가능 → 제외.
 _PARTICLE_FINAL: frozenset[str] = frozenset("은는이가을를의에로와과")
 
+# 한국어 *어말 연결어미 + 종결 어미* 패턴 — 2자 이상 suffix.
+# 이런 어말이 토큰 끝에 붙으면 일반 어휘이지 인명 아님 (예: "같은데/먹는데/하다가").
+# KDPII PERSON FP 분석 기반.
+_COMMON_KOREAN_ENDINGS: tuple[str, ...] = (
+    # 연결어미
+    "은데", "는데", "라서", "어서", "아서", "면서", "다가",
+    "지만", "거나", "더라", "더라도", "이라도",
+    "고요", "는걸", "는군", "더군", "는데요", "거든",
+    "을까", "을지", "려고", "려면", "도록", "토록",
+    # 종결어미 (반말·존댓말 변형)
+    "이에요", "예요", "이고", "이며", "이니", "이라",
+    "입니다", "이지요",
+    # 조사 결합
+    "에서", "에게", "한테", "보다", "처럼", "마다", "조차", "마저", "부터", "까지",
+    "라고", "이라고",
+)
+
+
+def _ends_with_common_korean_ending(raw: str) -> bool:
+    """토큰이 흔한 한국어 어말로 끝나면 True (PERSON 거부 신호)."""
+    return any(raw.endswith(end) for end in _COMMON_KOREAN_ENDINGS)
+
 
 def _ends_with_verb_or_particle(raw: str) -> bool:
     """토큰 끝이 동사 활용 또는 조사 부착이면 True (PERSON 거부 신호)."""
@@ -389,6 +411,9 @@ def _detect_with_dict(
         # Skip 토큰 끝이 동사 어미/조사 부착 형태 (KDPII FP 분석)
         # 단, 2자 토큰은 surname+이름 패턴이 흔하므로 예외 (성씨 확실한 경우에만)
         if len(stem) >= 3 and _ends_with_verb_or_particle(stem):
+            continue
+        # Skip 토큰이 흔한 한국어 어말로 끝남 ("같은데/먹는데/하라서" 등)
+        if len(stem) >= 3 and _ends_with_common_korean_ending(stem):
             continue
 
         # Embedded title — "강회장이" 같이 토큰 안에 직책이 들어있으면

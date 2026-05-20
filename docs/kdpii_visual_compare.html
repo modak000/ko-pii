@@ -74,8 +74,8 @@ sup { font-size: 0.7em; }
 
 <div class="doc">
   <div class="doc-title">문서 #8</div>
-  <div class="stats">Gold: PERSON×1 · k-pii: TP=0 FP=2 FN=1</div>
-  <div class="text"><span class="span-fn" style="background:#fff3cd;padding:1px 3px;border-radius:3px;" title="FN: PERSON">알랭<sup style="color:#0d6efd;font-weight:bold;font-size:0.75em;"> [PERSON/FN]</sup></span>은 내가 <span class="span-fp" style="background:#f8d7da;padding:1px 3px;border-radius:3px;" title="FP: ADDRESS">프랑스<sup style="color:#fd7e14;font-weight:bold;font-size:0.75em;"> [ADDRESS/FP]</sup></span> 갔을 때 많이 들어본 이름 <span class="span-fp" style="background:#f8d7da;padding:1px 3px;border-radius:3px;" title="FP: PERSON">같은데<sup style="color:#0d6efd;font-weight:bold;font-size:0.75em;"> [PERSON/FP]</sup></span>, 너 불어 거의 못하잖아.</div>
+  <div class="stats">Gold: PERSON×1 · k-pii: TP=0 FP=1 FN=1</div>
+  <div class="text"><span class="span-fn" style="background:#fff3cd;padding:1px 3px;border-radius:3px;" title="FN: PERSON">알랭<sup style="color:#0d6efd;font-weight:bold;font-size:0.75em;"> [PERSON/FN]</sup></span>은 내가 <span class="span-fp" style="background:#f8d7da;padding:1px 3px;border-radius:3px;" title="FP: ADDRESS">프랑스<sup style="color:#fd7e14;font-weight:bold;font-size:0.75em;"> [ADDRESS/FP]</sup></span> 갔을 때 많이 들어본 이름 같은데, 너 불어 거의 못하잖아.</div>
 </div>
 
 <div class="doc">
@@ -122,8 +122,8 @@ sup { font-size: 0.7em; }
 
 <div class="doc">
   <div class="doc-title">문서 #16</div>
-  <div class="stats">Gold: ADDRESS×1 · k-pii: TP=0 FP=1 FN=1</div>
-  <div class="text">네, 오전에 <span class="span-fp" style="background:#f8d7da;padding:1px 3px;border-radius:3px;" title="FP: PERSON">금오동<sup style="color:#0d6efd;font-weight:bold;font-size:0.75em;"> [PERSON/FP]</sup></span>에 있는 우리아이종합병원에서 진료 받고 약도 타 왔어요.</div>
+  <div class="stats">Gold: ADDRESS×1 · k-pii: TP=0 FP=0 FN=1</div>
+  <div class="text">네, 오전에 <span class="span-fn" style="background:#fff3cd;padding:1px 3px;border-radius:3px;" title="FN: ADDRESS">금오동<sup style="color:#fd7e14;font-weight:bold;font-size:0.75em;"> [ADDRESS/FN]</sup></span>에 있는 우리아이종합병원에서 진료 받고 약도 타 왔어요.</div>
 </div>
 
 <div class="doc">
@@ -350,7 +350,7 @@ sup { font-size: 0.7em; }
 
 <div class="doc">
   <div class="doc-title">문서 #54</div>
-  <div class="stats">Gold: ADDRESS×1, PERSON×1, PHONE×1 · k-pii: TP=1 FP=1 FN=2</div>
+  <div class="stats">Gold: ADDRESS×1, PERSON×1, PHONE×1 · k-pii: TP=1 FP=0 FN=2</div>
   <div class="text"><span class="span-fn" style="background:#fff3cd;padding:1px 3px;border-radius:3px;" title="FN: PERSON">최진한<sup style="color:#0d6efd;font-weight:bold;font-size:0.75em;"> [PERSON/FN]</sup></span>,<span class="span-fn" style="background:#fff3cd;padding:1px 3px;border-radius:3px;" title="FN: ADDRESS">신갈동 761-18번지<sup style="color:#fd7e14;font-weight:bold;font-size:0.75em;"> [ADDRESS/FN]</sup></span>이고, 전화번호는 <span class="span-tp" style="background:#d4edda;padding:1px 3px;border-radius:3px;" title="TP: PHONE">010-8102-1834<sup style="color:#198754;font-weight:bold;font-size:0.75em;"> [PHONE/TP]</sup></span>입니다.</div>
 </div>
 
@@ -634,11 +634,11 @@ sup { font-size: 0.7em; }
 <table class="summary-table">
   <tr><th>지표</th><th>값</th></tr>
   <tr><td>TP (잡음 + gold)</td><td>73</td></tr>
-  <tr><td>FP (잡음 + gold 없음)</td><td>10</td></tr>
+  <tr><td>FP (잡음 + gold 없음)</td><td>7</td></tr>
   <tr><td>FN (못 잡음, gold 있음)</td><td>45</td></tr>
-  <tr><td>Precision</td><td>0.880</td></tr>
+  <tr><td>Precision</td><td>0.912</td></tr>
   <tr><td>Recall</td><td>0.619</td></tr>
-  <tr><td>F1</td><td>0.726</td></tr>
+  <tr><td>F1</td><td>0.737</td></tr>
 </table>
 
 <p style="margin-top:2em;color:#6c757d;font-size:0.9em;">
