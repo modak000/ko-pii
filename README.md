@@ -9,7 +9,12 @@
 
 > **상태:** v1.0.0 release-ready — **한국 공공 PII 솔루션**.
 > 31 PII (KDPII 표준 준식별자 포함) + 6 처리 전략 + HWP/PDF/표 입력 + Vault 암호화 + 감사 로그 + 배치 + 검토 큐 + HTML 리포트 + 한자/로마자 + **OpenAI Privacy Filter / Presidio / MCP 옵셔널 연계**.
-> 합성 코퍼스 480문서 micro F1 = 1.000 / KLUE-NER Korean-only F1 = 0.338.
+>
+> **정확도** (실데이터):
+> - KDPII 53,778 문서 micro **F1 = 0.650** ([Li Fei et al., IEEE Access 2024](https://ieeexplore.ieee.org/document/10681073))
+> - KLUE-NER 5,000 신문기사 PERSON only **F1 = 0.322**
+> - 합성 코퍼스 F1 = 1.000 (회귀 감지 sanity check 용도 — *실제 정확도 아님*)
+>
 > **코어 deps 0개**. 입력·보안·ML·Presidio·MCP 기능은 모두 extras 로 분리.
 
 ## 설치
@@ -183,14 +188,43 @@ pip install k-pii[all]                  # 모든 옵션
 - [`docs/integration_mcp.md`](docs/integration_mcp.md)
 
 **평가**
-- 합성 공문서 480 문서 micro F1 = **1.000** (8 seeds 일관)
-- KLUE-NER 한국 인명만 F1 = **0.338** (외부 자연어 신문기사)
-- KDPII (한국어 대화체 53k) micro F1 = **0.502**
-  - 강함 (F1 ≥ 0.95): EMAIL · RRN · FRN · IP · URL · PHONE · VEHICLE
-  - 중간 (0.5~0.9): HEIGHT · WEIGHT · DRIVER_LICENSE · PASSPORT · ACCOUNT · DT_BIRTH · MAJOR
-  - 약함 (< 0.5): EDUCATION · PERSON · CARD · ADDRESS · AGE
-  - 약점 원인은 *대화체 특성* (키워드 anchor 없는 단독 표기, KDPII 합성 카드의 Luhn 불통과 등)
-- `python -m k_pii.eval.benchmark -n 60 --seed 0` 으로 즉시 재현
+
+| 벤치마크 | 데이터 | 문서 수 | micro F1 | 용도 |
+|---|---|---:|---:|---|
+| [KDPII](https://ieeexplore.ieee.org/document/10681073) (메인) | 한국어 대화체 PII | 53,778 | **0.650** | 실제 정확도 |
+| [KLUE-NER](https://github.com/KLUE-benchmark/KLUE) | 신문기사 PS (인명) | 5,000 | 0.322 | 자연어 PERSON 어림짐작 |
+| 합성 코퍼스 | 6 템플릿 공문서 | 60×5 | 1.000 | **회귀 감지 sanity check** |
+
+⚠ **합성 F1=1.0 은 실제 정확도가 아니다.** 좁은 템플릿 (성명: / 주소: 라벨 anchor)
+에 검출기가 과적합되어 가능한 상한. CI/CD 통과 기준 (≥0.95) 으로만 활용.
+
+### 카테고리별 Tier (KDPII 기준)
+
+| Tier | F1 | 카테고리 | 운영 적합도 |
+|---|---|---|---|
+| **S** | ≥0.95 | EMAIL (0.999), VEHICLE, FRN, RRN, IP, PHONE, URL | Production 즉시 가능 |
+| **A** | 0.80-0.95 | WEIGHT (0.916), HEIGHT, DRIVER_LICENSE, ACCOUNT, AGE | 운영 가능 |
+| **B** | 0.50-0.80 | PASSPORT, MAJOR (0.705), DT_BIRTH, EDUCATION, POSITION | 사람 검토 권장 |
+| **C** | 0.20-0.50 | ADDRESS (0.403) | recall 보강 필요 |
+| **D** | <0.20 | PERSON (0.170), CARD (0.130) | 본질적 한계 — 아래 설명 |
+
+**PERSON F1 0.170 — 본질적 어려움.** 한국어 단성 성씨 (김/이/박) 가 매우 흔한 일반어
+prefix 라서 (민원/회신/시정 등), 대화체에서 anchor 없이 단독 등장하는 이름을 잡으면
+FP 폭증 trade-off. STRICT 모드로 운영 시 BLOCK 비율 충분.
+
+**CARD F1 0.130 — 정책상 정상.** KDPII 카드 gold 의 88.3% 가 Luhn 체크섬 invalid
+(저자 의도적 fake). k-pii Decision D-006 (Luhn 통과만 emit) 정책 유지 — 실제
+production 에서는 더 정확.
+
+상세 보고서: [`docs/real_data_benchmark.md`](docs/real_data_benchmark.md) ·
+[`docs/kdpii_session_report.md`](docs/kdpii_session_report.md)
+
+재현:
+```bash
+python -m k_pii.eval.kdpii kdpii.jsonl       # 메인 벤치마크
+python -m k_pii.eval.klue_benchmark klue.tsv # 자연어 PERSON
+python -m k_pii.eval.benchmark -n 60 --seed 0 # 회귀 감지
+```
 
 ```python
 from k_pii import Anonymizer, ProcessingMode, k_anonymity
@@ -553,9 +587,99 @@ KPII_VAULT_PASSWORD=secret \
   k-pii input.hwp --vault vault.kvault --audit-log audit.jsonl
 ```
 
+## 전체 작동 요약
+
+### 잘 잡는 것 (Tier S/A — 운영 가능)
+
+| 카테고리 | 핵심 메커니즘 | KDPII F1 | 한계 |
+|---|---|---:|---|
+| **EMAIL** | RFC 5322 정규식 | 0.999 | 한글 도메인 미지원 |
+| **PHONE** | 통신사·지역 prefix + 대표번호 (15xx-18xx) | 0.989 | 비표준 prefix (1247/1040) 거부 |
+| **VEHICLE** | 신형 NN[가-힣]NNNN + 용도 한글 화이트리스트 | 0.996 | 2004 이전 (지역명 prefix) 미지원 |
+| **RRN** | 13자리 + 날짜 + 한국 체크섬 | 0.995 | 후-2020 무작위화는 체크섬 fail (confidence 0.7로 emit) |
+| **FRN** | gender 자리 5-8 + 체크섬 | 0.997 | RRN과 자동 분리 |
+| **IP** | IPv4 옥텟 0-255 / IPv6 RFC 4291 | 0.992 | IPv4 사설/공용 구분 안 함 |
+| **URL** | http(s)/ftp 표준 | 0.997 | path 내부 PII 별도 검출 |
+| **WEIGHT** | "70kg/70킬로" 1-300 | 0.916 | INFO 수준 (단독 PII 아님) |
+| **HEIGHT** | "175cm/1.75m" 50-250 | 0.875 | INFO 수준 |
+| **DRIVER_LICENSE** | 지방청 코드 11-28 + 12자리 | 0.873 | 체크섬 미적용 (도교공단 미공개) |
+| **ACCOUNT** | "계좌" 키워드 + 10-14자리 | 0.843 | 은행별 포맷 사전 미통합 |
+| **AGE** | "32세/32살" 0-150 | 0.821 | 한글 음역 ("서른두 살") 지원 |
+
+### 중간 (Tier B — 사람 검토 권장)
+
+| 카테고리 | 핵심 메커니즘 | KDPII F1 | 약점 원인 |
+|---|---|---:|---|
+| **MAJOR** | KEDI 학과 사전 + 학과/학부/전공 suffix + 단과대 약칭 (의대/공대) | 0.705 | "실용음악과/예술학과" 등 사전 누락 |
+| **PASSPORT** | prefix (M/S/O/D/R/T/PP/PD) + 8자리 | 0.795 | 키워드 anchor 모호한 케이스 |
+| **DT_BIRTH** | 날짜 + 키워드/풀네임/생 marker anchor | 0.666 | 대화체 "내 생일이 03년 5월 1일이라서" 일부 누락 |
+| **EDUCATION** | 대학교 ~330개 사전 + 약칭 매핑 | 0.596 | 고등학교/중학교/초등학교 (KDPII 빈출) 사전 미수록 |
+| **POSITION** | titles ~250개 사전 + "직급:" anchor + "님" 호칭 | 0.551 | 인명 인접 "김 대리" 단독 매칭 안 함 (합성 회귀 방지) |
+
+### 약함 (Tier C/D — 본질적 한계)
+
+| 카테고리 | KDPII F1 | 왜 어려운가 |
+|---|---:|---|
+| **ADDRESS** | 0.403 | KDPII LC_ADDRESS gold 의 동 단위 (화곡동/회기동) 가 anchor 없이 단독 등장. anchor 정책 완화 시 일반 문장 FP 폭증 (예: "강남구 영등포구 등 25개 자치구"). trade-off 결정. |
+| **PERSON** | 0.170 | 한국어 단성 성씨 (김/이/박/최) 가 매우 흔한 일반어 prefix. 대화체에서 anchor 없이 단독 등장하는 이름 (수민/지호/은하) 을 잡으면 FP 폭증. PARANOID/STRICT 모드에서 BLOCK 비율은 충분. |
+| **CARD** | 0.130 | KDPII 카드 gold 의 **88.3% 가 Luhn invalid** (저자 의도적 fake 데이터). Decision D-006 (Luhn 통과만 emit) 정책 유지 — 실제 production 에서는 정확. |
+
+### 절대 안 잡는 것 (스코프 밖)
+
+| 미지원 | 대신 사용 |
+|---|---|
+| **이름 단독 (anchor 없음)** | 인접 직책·기관·필드 라벨이 없으면 PERSON 거부 |
+| **별명 (PS_NICKNAME)** | KDPII 라벨이지만 가명·PII 모호로 별도 카테고리 미구현 |
+| **회사·부서명 (OG_WORKPLACE/OG_DEPARTMENT)** | k-pii 스코프 밖 — 별도 NER 도구 사용 권장 |
+| **종교 (OGG_RELIGION) / 혈액형 (TM_BLOOD_TYPE) / 성별 (CV_SEX)** | 카테고리 자체 미구현 |
+| **2004 이전 차량번호** (지역명 prefix) | 신형만 cover |
+| **외국 여권** | 한국 여권 prefix 만 |
+| **소문자 여권 번호** | 한국 여권은 대문자 |
+| **이미 가명화된 표기 (박씨/홍씨)** | 의도적 거부 |
+| **KCD 진단코드** | 의료 양식 비표준 → 검출기 제외 |
+
+### 위험도 분기 — 같은 카테고리라도 sub-type 별
+
+| 입력 | 라벨 | 위험도 | 사유 |
+|---|---|---|---|
+| `010-2847-3915` | PHONE | **HIGH** | 모바일 = 개인 직통 |
+| `02-3479-6128` | PHONE | MEDIUM | 유선 = 사업장·대표번호 포함 |
+| `1588-7264` | PHONE | MEDIUM | 전국 대표 |
+| `880101-2123456` | RRN | **CRITICAL** | 단독 식별자 |
+| `https://example.com` | URL | INFO | 단독 URL 은 PII 아님 |
+| `서울` | ADDRESS | LOW | 단독 행정구역 + anchor 있을 때만 |
+
+### 결합 위험도 자동 평가
+
+`Anonymizer.process()` 가 자동으로 결합 위험도 산정:
+
+```python
+result.combined_risk.combined_risk     # → RiskLevel.CRITICAL
+result.combined_risk.rationale         # → ["식별자 RRN 등장 → 즉시 식별 가능"]
+result.combined_risk.identifiers       # → {"RRN"}
+result.combined_risk.quasi_identifiers # → {"ADDRESS", "DT_BIRTH", "PHONE"}
+```
+
+「개인정보 비식별 조치 가이드라인」 기반 분류 + k-익명성 평가 (threshold 5).
+
 ## 라이선스
 
 Apache License 2.0.
+
+## 인용
+
+본 라이브러리의 KDPII 벤치마크 점수를 보고서·논문에 인용하는 경우:
+
+```bibtex
+@article{fei2024kdpii,
+  title={KDPII: A New Korean Dialogic Dataset for the Deidentification of
+         Personally Identifiable Information},
+  author={Fei, Li and Kang, Yejee and Park, Seoyoon and Jang, Yeonji
+          and Lee, Jongkyu and Kim, Hansaem},
+  journal={IEEE Access}, year={2024}, publisher={IEEE},
+  doi={10.1109/ACCESS.2024.3461804}
+}
+```
 
 ## 법적 참고 문서
 
