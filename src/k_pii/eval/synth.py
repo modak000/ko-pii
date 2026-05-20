@@ -515,6 +515,129 @@ def _fire_dispatch(rnd: random.Random) -> GoldDocument:
     })
 
 
+def _court_decision(rnd: random.Random) -> GoldDocument:
+    """법원 판결문 일부 — 사건 처리 결정 (간이)."""
+    judge = rnd.choice(_NAMES)
+    plaintiff = rnd.choice([n for n in _NAMES if n != judge])
+    defendant = rnd.choice([n for n in _NAMES if n not in {judge, plaintiff}])
+    plaintiff_rrn = rnd.choice(_RRN_SAMPLES)
+    defendant_rrn = rnd.choice([r for r in _RRN_SAMPLES if r != plaintiff_rrn])
+    plaintiff_addr = rnd.choice(_ADDR_ROAD)
+    defendant_addr = rnd.choice([a for a in _ADDR_ROAD if a != plaintiff_addr])
+    case_num = f"2026가합{rnd.randint(10000, 99999)}"
+    abbrev = rnd.choice(_AGENCY_ABBREV_POOL)
+    docnum = f"{abbrev}-법원-2026-{rnd.randint(10000, 99999)}"
+
+    parts = [
+        ("[판결문]\n\n", None),
+        ("문서번호: ", None),
+        (docnum, "DOC_ID"),
+        ("\n사건번호: ", None),
+        (case_num, "COURT_CASE"),
+        ("\n선고일자: 2026년 5월 19일\n\n", None),
+        ("□ 사건 당사자\n", None),
+        ("  - 원고: ", None),
+        (plaintiff, "PERSON"),
+        ("\n  - 주민등록번호: ", None),
+        (plaintiff_rrn, "RRN"),
+        ("\n  - 주소: ", None),
+        (plaintiff_addr, "ADDRESS"),
+        ("\n  - 피고: ", None),
+        (defendant, "PERSON"),
+        ("\n  - 주민등록번호: ", None),
+        (defendant_rrn, "RRN"),
+        ("\n  - 주소: ", None),
+        (defendant_addr, "ADDRESS"),
+        ("\n\n□ 주문\n", None),
+        ("  1. 피고는 원고에게 금 5,000,000원 및 이에 대한 ", None),
+        ("2026년 1월 1일부터 다 갚는 날까지 연 5% 의 비율로 ", None),
+        ("계산한 돈을 지급하라.\n", None),
+        ("  2. 소송비용은 피고가 부담한다.\n\n", None),
+        ("□ 청구취지\n", None),
+        ("  원고는 피고에게 위 주문과 같은 판결을 구하였다.\n\n", None),
+        ("□ 이유 (요약)\n", None),
+        ("  본 사건은 2025년 12월에 발생한 계약 불이행 분쟁으로, ", None),
+        ("원고 ", None),
+        (plaintiff, "PERSON"),
+        ("이 제출한 증거에 의하여 청구취지가 인정되며 ", None),
+        ("피고 ", None),
+        (defendant, "PERSON"),
+        ("의 항변은 이유 없으므로 기각함.\n\n", None),
+        ("□ 재판부\n", None),
+        ("  판사: ", None),
+        (judge, "PERSON"),
+        ("\n\n", None),
+        ("본 판결문은 「민사소송법」 제202조 및 ", None),
+        ("「개인정보보호법」 제2조에 따라 처리됨.\n", None),
+    ]
+    return _assemble(parts, template="court_decision", pii_labels={
+        "PERSON", "RRN", "ADDRESS", "DOC_ID", "COURT_CASE",
+    })
+
+
+def _tax_notice(rnd: random.Random) -> GoldDocument:
+    """국세청 세무 안내문 — 납세 안내·과세 사실 통보."""
+    taxpayer = rnd.choice(_NAMES)
+    handler = rnd.choice([n for n in _NAMES if n != taxpayer])
+    handler_title = rnd.choice(["사무관", "세무사", "주무관"])
+    rrn = rnd.choice(_RRN_SAMPLES)
+    bizreg = rnd.choice(_BIZREG_SAMPLES)
+    phone = rnd.choice(_PHONE_LANDLINE)
+    rep_phone = rnd.choice(_PHONE_REPRESENTATIVE)
+    addr = rnd.choice(_ADDR_ROAD)
+    docnum = f"국세청-세무서-2026-{rnd.randint(10000, 99999)}"
+    tax_year = "2025년"
+    notice_num = f"2026-과세-{rnd.randint(10000, 99999)}"
+
+    parts = [
+        ("[과세 사실 통보서]\n\n", None),
+        ("문서번호: ", None),
+        (docnum, "DOC_ID"),
+        (f"\n통보번호: {notice_num}\n", None),
+        ("통보일자: 2026년 5월 18일\n\n", None),
+        ("□ 납세자 정보\n", None),
+        ("  - 성명: ", None),
+        (taxpayer, "PERSON"),
+        ("\n  - 주민등록번호: ", None),
+        (rrn, "RRN"),
+        ("\n  - 사업자등록번호: ", None),
+        (bizreg, "BUSINESS_REG"),
+        ("\n  - 주소: ", None),
+        (addr, "ADDRESS"),
+        ("\n\n□ 통보 내용\n", None),
+        (f"  {tax_year} 귀속분 종합소득세 신고서 검토 결과 다음과 같이 ", None),
+        ("과세 사실이 확인되어 통보합니다.\n", None),
+        ("  - 사업소득 누락액: 12,500,000원\n", None),
+        ("  - 미신고 가산세: 1,250,000원\n", None),
+        ("  - 가산금: 187,500원\n", None),
+        ("  - 합계: 13,937,500원\n\n", None),
+        ("□ 처리 사항\n", None),
+        ("  본 통보서를 받으신 분께서는 통보일로부터 30일 이내에 ", None),
+        ("아래 방법 중 한 가지로 회신하여 주시기 바랍니다.\n", None),
+        ("  1) 자진 납부: 가까운 세무서 또는 국세청 홈택스를 통해 납부\n", None),
+        ("  2) 이의 신청: 통보 사항에 동의하지 않으신 경우 이의신청서 제출\n", None),
+        ("  3) 분할 납부 신청: 일시 납부가 어려운 경우 분할 납부 신청 가능\n\n", None),
+        ("□ 관련 법령\n", None),
+        ("  - 소득세법 제80조 (수입금액의 누락 등에 따른 추가 과세)\n", None),
+        ("  - 국세기본법 제45조 (가산세)\n\n", None),
+        ("□ 담당자 정보\n", None),
+        ("  - 담당자: ", None),
+        (handler, "PERSON"),
+        (f" {handler_title}\n", None),
+        ("  - 직통전화: ", None),
+        (phone, "PHONE"),
+        ("\n  - 대표번호: ", None),
+        (rep_phone, "PHONE"),
+        ("\n\n", None),
+        ("본 통보서에 명시된 개인정보는 「개인정보보호법」 제24조의2 에 ", None),
+        ("따라 수집·이용되며, 세무 행정 목적 외 사용을 금합니다.\n", None),
+        (rnd.choice(_SIGNOFF_PHRASES) + "\n", None),
+    ]
+    return _assemble(parts, template="tax_notice", pii_labels={
+        "PERSON", "RRN", "BUSINESS_REG", "ADDRESS", "PHONE", "DOC_ID",
+    })
+
+
 _TEMPLATES: tuple[Callable[[random.Random], GoldDocument], ...] = (
     _gov_decree,
     _civil_petition,
@@ -522,6 +645,8 @@ _TEMPLATES: tuple[Callable[[random.Random], GoldDocument], ...] = (
     _meeting_minutes,
     _police_report,
     _fire_dispatch,
+    _court_decision,
+    _tax_notice,
 )
 
 
@@ -562,6 +687,8 @@ def generate_document(seed: int | None = None, template: str | None = None) -> G
             "meeting_minutes": _meeting_minutes,
             "police_report": _police_report,
             "fire_dispatch": _fire_dispatch,
+            "court_decision": _court_decision,
+            "tax_notice": _tax_notice,
         }
         if template not in mapping:
             raise ValueError(f"Unknown template: {template}")
