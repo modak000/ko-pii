@@ -261,8 +261,7 @@ FP 폭증 trade-off. STRICT 모드로 운영 시 BLOCK 비율 충분.
 (저자 의도적 fake). k-pii Decision D-006 (Luhn 통과만 emit) 정책 유지 — 실제
 production 에서는 더 정확.
 
-상세 보고서: [`docs/real_data_benchmark.md`](docs/real_data_benchmark.md) ·
-[`docs/kdpii_session_report.md`](docs/kdpii_session_report.md)
+상세 보고서: [`docs/EVALUATION_REPORT.md`](docs/EVALUATION_REPORT.md) (통합본 — KDPII 카테고리별 분석 + Tier 분류 + 과탐 분석 + Decision Log + 개선 추이)
 
 재현:
 ```bash
@@ -609,20 +608,21 @@ python examples/18_user_megademo.py --html demo.html
 
 | 문서 | 내용 |
 |---|---|
-| [`real_data_benchmark.md`](docs/real_data_benchmark.md) | **정식 통합 벤치마크 보고서** (KDPII / KLUE-NER / 합성) |
-| [`kdpii_session_report.md`](docs/kdpii_session_report.md) | KDPII 평가 세션 + Decision Log |
-| [`sample_redaction.md`](docs/sample_redaction.md) | 종로구 민원 회신문 가명화 샘플 |
-| [`synthetic_corpus_samples.md`](docs/synthetic_corpus_samples.md) | 합성 평가 코퍼스 6 템플릿 샘플 |
+| [`EVALUATION_REPORT.md`](docs/EVALUATION_REPORT.md) | **통합 평가 보고서** — KDPII 실데이터 결과, Tier 분류, 과탐 분석, Decision Log, 개선 추이, 가명화 샘플, 재현 명령 |
+| [`sample_redaction.md`](docs/sample_redaction.md) | 종로구 민원 회신문 가명화 샘플 (Before/After) |
 | [`legal_mapping.md`](docs/legal_mapping.md) | 카테고리별 법조항 매핑 |
 | [`annotation_policy.md`](docs/annotation_policy.md) | 검출 정책 (왜 잡고/왜 거부) |
 | [`risk_levels.md`](docs/risk_levels.md) | 위험도 정책 + 모드별 차단 기준 |
 | [`pattern_analysis.md`](docs/pattern_analysis.md) | 패턴별 FP/FN 분석 |
 | [`coverage.md`](docs/coverage.md) | 카테고리별 검증 cover 매트릭스 |
+| [`improvement_report.md`](docs/improvement_report.md) | KLUE-NER 룰 개선 추이 (구버전) |
+| [`real_data_evaluation.md`](docs/real_data_evaluation.md) | KLUE-NER 평가 (구버전) |
 | [`integration_openai_privacy_filter.md`](docs/integration_openai_privacy_filter.md) | OpenAI Privacy Filter 통합 |
 | [`integration_presidio.md`](docs/integration_presidio.md) | Microsoft Presidio 통합 |
 | [`integration_mcp.md`](docs/integration_mcp.md) | Claude Desktop MCP 서버 |
 
 HTML 보고서:
+- [`kdpii_visual_compare.html`](docs/kdpii_visual_compare.html) — KDPII 100 문서 시각 비교 (TP/FN/FP)
 - [`sample_redaction.html`](docs/sample_redaction.html) — 실제 가명화 결과
 - [`synthetic_sample.html`](docs/synthetic_sample.html) — 합성 코퍼스 샘플
 - [`user_megademo.html`](docs/user_megademo.html) — 15 시나리오 종합
