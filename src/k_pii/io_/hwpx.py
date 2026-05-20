@@ -40,17 +40,47 @@ def _extract_text_from_section(xml_bytes: bytes) -> list[str]:
     return parts
 
 
+def _extract_metadata(xml_bytes: bytes) -> dict[str, str]:
+    """HWPX core 메타: 작성자·제목·키워드 추출."""
+    meta: dict[str, str] = {}
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError:
+        return meta
+    LOCAL_KEYS = {"creator", "lastModifiedBy", "title", "subject",
+                  "Author", "LastSavedBy", "Title"}
+    for elem in root.iter():
+        local = elem.tag.split("}", 1)[-1]
+        if local in LOCAL_KEYS and elem.text:
+            meta[local] = elem.text
+    return meta
+
+
 def read_text(path: str) -> str:
     out: list[str] = []
     with zipfile.ZipFile(path, "r") as zf:
+        names = zf.namelist()
+        # 메타데이터 (META-INF/core.xml 또는 docInfo.xml)
+        meta_candidates = [
+            "META-INF/core.xml", "Contents/core.xml",
+            "docProps/core.xml",
+        ]
+        for mc in meta_candidates:
+            if mc in names:
+                meta = _extract_metadata(zf.read(mc))
+                for key in ("creator", "lastModifiedBy", "title", "subject",
+                            "Author", "LastSavedBy", "Title"):
+                    if key in meta:
+                        out.append(f"[메타:{key}] {meta[key]}\n")
+                break
         section_names = sorted(
-            n for n in zf.namelist()
+            n for n in names
             if n.startswith("Contents/section") and n.endswith(".xml")
         )
         if not section_names:
             # Some HWPX variants put sections elsewhere
             section_names = sorted(
-                n for n in zf.namelist()
+                n for n in names
                 if n.endswith(".xml") and "section" in n.lower()
             )
         for name in section_names:

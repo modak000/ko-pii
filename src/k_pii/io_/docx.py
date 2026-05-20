@@ -30,18 +30,40 @@ def _extract_from_xml(xml_bytes: bytes) -> list[str]:
     return parts
 
 
+def _extract_metadata(xml_bytes: bytes) -> dict[str, str]:
+    """docProps/core.xml 의 작성자·수정자·제목 추출."""
+    meta: dict[str, str] = {}
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError:
+        return meta
+    LOCAL_KEYS = {"creator", "lastModifiedBy", "title", "subject", "keywords"}
+    for elem in root.iter():
+        local = elem.tag.split("}", 1)[-1]
+        if local in LOCAL_KEYS and elem.text:
+            meta[local] = elem.text
+    return meta
+
+
 def read_text(path: str) -> str:
     out: list[str] = []
     with zipfile.ZipFile(path, "r") as zf:
+        names = zf.namelist()
+        # 메타데이터 — 작성자·수정자가 PII 인 경우가 잦음
+        if "docProps/core.xml" in names:
+            meta = _extract_metadata(zf.read("docProps/core.xml"))
+            for key in ("creator", "lastModifiedBy", "title", "subject"):
+                if key in meta:
+                    out.append(f"[메타:{key}] {meta[key]}\n")
         # Main body
         candidates = ["word/document.xml"]
         # Headers / footers
         candidates += sorted(
-            n for n in zf.namelist()
+            n for n in names
             if n.startswith("word/header") or n.startswith("word/footer")
         )
         for name in candidates:
-            if name in zf.namelist():
+            if name in names:
                 out.extend(_extract_from_xml(zf.read(name)))
                 out.append("\n")
     return "".join(out)

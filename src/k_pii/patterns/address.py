@@ -230,8 +230,13 @@ def detect(text: str) -> Iterator[DetectionResult]:
         token, particle = strip_trailing_particle(raw_token)
         if len(token) < 2:
             continue
-        # span 은 stem 부분 (조사 제외)
-        actual_end = m.end() - (len(particle) if particle else 0)
+        # 국적 접미사 strip ("한국인/미국인" → "한국/미국", country dict 매칭 시만)
+        people_suffix = None
+        if len(token) >= 3 and token.endswith("인") and is_country(token[:-1]):
+            token = token[:-1]
+            people_suffix = "인"
+        # span 은 stem 부분 (조사·접미사 제외)
+        actual_end = m.end() - (len(particle) if particle else 0) - (1 if people_suffix else 0)
         span = (m.start(), actual_end)
         if any(span[0] < e + ADMIN_ALONE_ADJACENCY and s - ADMIN_ALONE_ADJACENCY < span[1]
                for s, e in seen):
