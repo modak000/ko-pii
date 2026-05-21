@@ -130,10 +130,11 @@ _MAJOR_PATTERN_SHORT = re.compile(
 
 # 단과대 약칭 — 의대/공대/미대/약대/법대/치대/한의대 등 (KDPII gold 빈출)
 _MAJOR_FACULTY_ABBREV: frozenset[str] = frozenset([
-    "의대", "치대", "한의대", "약대", "수의대",
-    "법대", "행정대", "경상대학",
+    "의대", "치대", "한의대", "약대", "수의대", "의과대학",
+    "법대", "행정대", "경상대학", "경상대",
     "공대", "미대", "음대", "체대", "예대", "사범대",
     "신학대", "농대", "건축대",
+    "경영대", "생과대",  # KDPII gold 보강
 ])
 _MAJOR_FACULTY_PATTERN = re.compile(
     r"(?<![가-힣A-Za-z])"
@@ -327,9 +328,34 @@ _KOREAN_AGE_TWENTIES = {
 _KOREAN_AGE_PATTERN = re.compile(
     r"(?<![가-힣])"
     r"(스무|"
-    r"(?:열|스물|서른|마흔|쉰|예순|일흔|여든|아흔)(?:\s*(?:한|두|세|네|다섯|여섯|일곱|여덟|아홉))?)"
+    r"(?:열|스물|서른|마흔|쉰|예순|일흔|여든|아흔)(?:\s*(?:한|두|세|네|다섯|여섯|일곱|여덟|아홉))?|"
+    r"한|두|세|네|다섯|여섯|일곱|여덟|아홉)"  # 일의자리 단독 ("한 살/세 살")
     r"\s*살"
 )
+
+# 한자어 나이 명사 — 환갑/칠순/팔순 등 (60대 이상 명시적 호칭)
+_KOREAN_AGE_NOUN = {
+    "환갑": 60, "회갑": 60, "진갑": 61,
+    "고희": 70, "칠순": 70, "고희연": 70,
+    "산수": 80, "팔순": 80,
+    "구순": 90, "졸수": 90,
+    "백수": 99, "백세": 100,
+}
+_KOREAN_AGE_NOUN_PATTERN = re.compile(
+    r"(?<![가-힣])"
+    r"(환갑|회갑|진갑|고희연|고희|칠순|산수|팔순|구순|졸수|백수|백세)"
+    r"(?![가-힣])"
+)
+
+# 영유아 연령 — N개월 + 키워드 anchor ("아기/돌/생후/만") 필요
+_INFANT_MONTH_PATTERN = re.compile(
+    r"(?<![0-9])"
+    r"(\d{1,2})\s*개월"
+    r"(?![0-9])"
+)
+_INFANT_ANCHORS = ("아기", "아이", "딸", "아들", "둘째", "첫째",
+                   "생후", "만 ", "되었", "되었어", "되었네", "지났",
+                   "돌", "출산")
 
 _HEIGHT_PATTERN = re.compile(
     r"(?<![0-9.])"
@@ -356,10 +382,16 @@ _WEIGHT_PATTERN = re.compile(
 
 
 def _parse_korean_age(token: str) -> int | None:
-    """'서른두', '스물여섯', '마흔다섯' 등을 숫자로 변환."""
+    """'서른두', '스물여섯', '마흔다섯' 등을 숫자로 변환.
+
+    일의자리 단독 ("한/두/세/.../아홉") 도 지원 — "한 살" 같은 영유아 표현.
+    """
     if token in _KOREAN_AGE_TWENTIES:
         return _KOREAN_AGE_TWENTIES[token]
-    # 분리
+    # 일의자리 단독
+    if token in _KOREAN_AGE_ONES:
+        return _KOREAN_AGE_ONES[token]
+    # 십대 + (일의자리)
     for tens_kor, tens_val in _KOREAN_AGE_TENS.items():
         if token.startswith(tens_kor):
             rest = token[len(tens_kor):].strip()
@@ -422,6 +454,48 @@ def detect_measurements(text: str) -> Iterator[DetectionResult]:
             legal_basis=LEGAL_BASIS,
             extra={"category": "준식별자", "value": age, "unit": "year",
                    "format": "korean"},
+        )
+
+    # 한자어 나이 명사 (환갑/칠순/팔순 등)
+    for m in _KOREAN_AGE_NOUN_PATTERN.finditer(text):
+        span = (m.start(), m.end())
+        if any(span[0] < e and s < span[1] for s, e in seen_age):
+            continue
+        token = m.group(1)
+        age = _KOREAN_AGE_NOUN[token]
+        seen_age.add(span)
+        yield DetectionResult(
+            label="AGE", text=m.group(0),
+            start=span[0], end=span[1],
+            risk_level=RiskLevel.INFO, confidence=0.9,
+            evidence=["pattern:age_noun", f"value:{age}", f"token:{token}"],
+            legal_basis=LEGAL_BASIS,
+            extra={"category": "준식별자", "value": age, "unit": "year",
+                   "format": "noun"},
+        )
+
+    # 영유아 연령 — N개월 + anchor 필요 (일반 N개월 차이/일정/근무 등 거부)
+    for m in _INFANT_MONTH_PATTERN.finditer(text):
+        months = int(m.group(1))
+        if not (0 <= months <= 60):  # 5세 이하만
+            continue
+        span = (m.start(), m.end())
+        if any(span[0] < e and s < span[1] for s, e in seen_age):
+            continue
+        # anchor 윈도우 25자
+        window_start = max(0, span[0] - 25)
+        window_end = min(len(text), span[1] + 10)
+        if not any(a in text[window_start:window_end] for a in _INFANT_ANCHORS):
+            continue
+        seen_age.add(span)
+        yield DetectionResult(
+            label="AGE", text=m.group(0),
+            start=span[0], end=span[1],
+            risk_level=RiskLevel.INFO, confidence=0.85,
+            evidence=["pattern:age_months", f"value:{months}개월"],
+            legal_basis=LEGAL_BASIS,
+            extra={"category": "준식별자", "value": months, "unit": "month",
+                   "format": "infant"},
         )
 
     for m in _HEIGHT_PATTERN.finditer(text):
