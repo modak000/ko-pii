@@ -8,13 +8,18 @@
 한국 공공 부문 문서를 위한 규칙 기반 개인정보(PII) 비식별 라이브러리. **외부 ML 없이** 룰만으로 production-ready.
 
 > **상태:** v1.0.0 release-ready — **한국 공공 PII 솔루션**.
-> 31 PII (KDPII 표준 준식별자 포함) + 6 처리 전략 + HWP/PDF/표 입력 + Vault 암호화 + 감사 로그 + 배치 + 검토 큐 + HTML 리포트 + 한자/로마자 + **OpenAI Privacy Filter / Presidio / MCP 옵셔널 연계**.
+> **32 PII 카테고리** (KDPII 표준 준식별자 포함) + 6 처리 전략 + 5 모드 +
+> HWP/PDF/CSV/XLSX 입력 + Vault AES-256-GCM 암호화 + 감사 로그 + 배치 +
+> 검토 큐 + HTML 리포트 + 한자/로마자 변형 +
+> **OpenAI Privacy Filter / Microsoft Presidio / MCP 옵셔널 연계**.
 >
 > **정확도** (도메인별):
 > - **공공 문서 본문 산문 (메인 도메인): F1 ≈ 0.83**
-> - 합성 풍부화 코퍼스 F1 = 0.83 (회귀 감지)
-> - KDPII 일상 대화 (참고): F1 = 0.665 — *대화체 도메인, 1-2자 별명 50% 포함, 우리 도메인 지표 아님*
-> - KLUE-NER 신문기사 PERSON: F1 = 0.322
+> - 합성 풍부화 코퍼스 (13 템플릿): F1 = 0.85 (회귀 감지)
+> - KDPII 일상 대화 (참고): F1 = 0.699 (풀네임 평가) — *대화체 도메인, 우리 도메인 지표 아님*
+> - KLUE-NER 신문기사 PERSON (참고): F1 = 0.376
+>
+> **코어 deps 0개**. 입력·보안·ML·Presidio·MCP 기능은 모두 extras 로 분리.
 >
 > **코어 deps 0개**. 입력·보안·ML·Presidio·MCP 기능은 모두 extras 로 분리.
 
