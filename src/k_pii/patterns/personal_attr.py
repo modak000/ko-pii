@@ -295,11 +295,21 @@ def detect_position(text: str) -> Iterator[DetectionResult]:
 # ═══════════════════════════════════════════════════════════════════════
 # AGE / HEIGHT / WEIGHT (측정치)
 # ═══════════════════════════════════════════════════════════════════════
+# "32세/30살" — 조사·연결어미 다양 ("30살인데/30살밖에")
+# 한글 lookahead 제거 — KDPII gold 와 substring overlap 최대화.
+# "X세기/세대" 같은 단위 매칭은 INFO 수준이라 가독성 손해 없음.
 _AGE_PATTERN = re.compile(
     r"(?<![0-9])"
     r"(\d{1,3})"
     r"\s*(?:세|살)"
-    r"(?=[은는이가도만에으로의을를과와요예니다,.\s)\]\!\?]|$)"
+    r"(?![0-9])"   # 숫자 직후만 거부 (다른 측정치와 충돌 방지)
+)
+
+# 연령대 — "30대/20대 후반/40대 초반" 등 ("X0대" 형식, 10~99)
+_AGE_RANGE_PATTERN = re.compile(
+    r"(?<![0-9])"
+    r"(\d{1,2}0)대"
+    r"(?![0-9가-힣])"
 )
 
 # 한글 음역 — "서른두 살", "스물여섯 살", "마흔 다섯 살" 등
@@ -374,6 +384,24 @@ def detect_measurements(text: str) -> Iterator[DetectionResult]:
                 evidence=["pattern:age", f"value:{age}"],
                 legal_basis=LEGAL_BASIS,
                 extra={"category": "준식별자", "value": age, "unit": "year"},
+            )
+
+    # 연령대 ("30대/40대 후반")
+    for m in _AGE_RANGE_PATTERN.finditer(text):
+        age = int(m.group(1))
+        if 10 <= age <= 90:
+            span = (m.start(), m.end())
+            if any(span[0] < e and s < span[1] for s, e in seen_age):
+                continue
+            seen_age.add(span)
+            yield DetectionResult(
+                label="AGE", text=m.group(0),
+                start=span[0], end=span[1],
+                risk_level=RiskLevel.INFO, confidence=0.85,
+                evidence=["pattern:age_range", f"value:{age}대"],
+                legal_basis=LEGAL_BASIS,
+                extra={"category": "준식별자", "value": age, "unit": "decade",
+                       "format": "range"},
             )
 
     # 한글 음역
