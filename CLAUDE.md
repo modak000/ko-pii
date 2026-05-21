@@ -222,48 +222,158 @@ emit.
 **선택:** 신형 (NN[가-힣]NNNN, NNN[가-힣]NNNN) 만 지원.
 **이유:** YAGNI. 사용자가 실제 부딪히면 추가.
 
-## 6. Phase 진행 현황 (2026-05-15 기준)
+### D-011. KDPII 라벨 매핑 정정
+**문제:** 초기 평가에서 `AC_*` prefix 가정으로 매핑 → TP 0건. KDPII 실제 라벨은
+`TMI_EMAIL / QT_PHONE / QT_RESIDENT_NUMBER / TMI_SITE` 등 다른 prefix.
+**선택:** 분포 직접 조사 후 매핑 정정. `eval/kdpii.py::KDPII_LABEL_MAP` 참조.
+**효과:** EMAIL F1=0.999 등 진짜 정확도 드러남. PHONE F1=0.989, RRN F1=0.995.
+
+### D-012. ADDRESS 단독 행정구역 + 국가명 anchor 차등
+**문제:** KDPII LC_ADDRESS gold 의 30% 가 "서울/화곡동/한국" 같은 단독 행정구역.
+**선택:** dict 통과 + 대화체 anchor 필수. 단 country (한국/미국/일본) 만 anchor
+면제 (KDPII LCP_COUNTRY 86% 가 anchor 없음).
+**효과:** ADDRESS F1 0.18 → 0.52, 일반 문장 ("강남구 영등포구 등 25개 자치구") FP 회피.
+
+### D-013. PERSON 평가는 풀네임 (3자+) 만
+**문제:** KDPII PERSON gold 의 50% 가 1-2자 별명·단성 ("재명/미선/주").
+**선택:** 평가 시 `person_min_length=3` 기본. 1-2자 단독은 PII 아니라고 봄
+(개인정보보호법 제2조: 그 자체로 식별 불가).
+**이유:** 공공 문서 도메인 = 풀네임 위주. KDPII 의 일상 대화 라벨 정책과 도메인 차이.
+
+### D-014. PERSON 다중 거부 룰 (호칭/접미사/행정구역/학교/은행/어말)
+**문제:** 한국어 단성 성씨 (김/이/박/최/정) = 매우 흔한 일반어 prefix → PERSON FP 폭증.
+**선택:** 10+ 거부 룰 + 한국어 형태소 사전 (`_COMMON_KOREAN_ENDINGS`) — 어말
+"은데/는데/라서/면서/까지/라고" 등 16종.
+**효과:** PERSON 오탐 5,202 → 2,120 (-59% 누적).
+
+### D-015. POSITION = 준식별자, 검출 후 결합 위험도 평가
+**문제:** "선생/교수/기사" 단독 호칭 — KDPII gold 가 PII 라벨 X.
+**선택:** POSITION 카테고리 별도 검출 + `analytics/combined_risk` 의 quasi_identifiers
+집합에 추가. PERSON + POSITION + AGE 결합 시 CRITICAL.
+**이유:** 「개인정보 비식별 조치 가이드라인」 의 *직업·직책 = 준식별자* 정의 부합.
+KDPII 와 정책 다름 (KDPII = 단독 라벨 X, k-pii = 검출 + 결합 평가).
+
+### D-016. 합성 코퍼스 풍부화 + 회귀 감지 sanity 용도
+**문제:** 6 템플릿 단순 양식에 검출기 과적합 → 합성 F1=1.000 (조작된 느낌).
+**선택:** (1) 13 템플릿 다단락 본문 (보도자료/감사보고/계약서/판결문/세무/인사발령/
+행정처분 등 추가), (2) 합성 점수를 *회귀 감지 sanity check* 으로 격하.
+**효과:** 합성 F1 1.000 → 0.85 (정직). 실제 정확도는 KDPII (0.699) + 공공 문서
+본문 산문 측정 (~0.83).
+
+### D-017. 부스트 길이 차등 (`deterministic_pii_nearby`)
+**문제:** RRN/PHONE 인접 부스트 +0.40 이 일반어 (전화했어/마실거) 까지 PERSON 으로 끌어올림.
+**선택:** 3자+ 풀네임 +0.40 유지, 2자 단명 +0.20 약화.
+
+### D-018. 직책 + 연결어미 prefix 매칭 ("주임이며" → "주임")
+**문제:** "박철수 주임이며" 같은 본문에서 `strip_trailing_particle("주임이며")` 가
+"이며" 못 strip → title 인식 실패.
+**선택:** `_has_title_adjacent` 의 `_resolve_title` 함수 — title dict 의 prefix 매칭.
+**효과:** 공공 문서 본문 산문 PERSON F1 ~0.83 달성.
+
+### D-019. EDUCATION 정규식 outer named-group 분리
+**문제:** outer `full` group 이 모든 alternation 흡수 → 약칭 (고대/홍대) 매칭 실패.
+**선택:** non-capturing outer `(?:...)` + 분리된 named groups + 짧은 X초/X중/X고
+약칭은 학교 anchor (졸업/다녀/출신/모교) 필수.
+
+### D-020. ADDRESS 국적 접미사 자동 strip
+**문제:** "한국인/미국인/일본인" 같은 국적 표현 검출 실패.
+**선택:** `_PATTERN_ADMIN_TOKEN` 매칭 후 token.endswith("인") + is_country(token[:-1])
+통과 시 "인" strip. "확인" 같은 일반어는 strip 후 1자라 dict 매칭 X → 영향 없음.
+**효과:** ADDRESS 정탐 +153.
+
+### D-021. DT_BIRTH 비-생일 키워드 거부
+**문제:** 합성 본문의 "선고일자/시행일자/배포일자" 같은 일반 일자가 DT_BIRTH 로 잡힘.
+**선택:** `_NON_BIRTH_KEYWORDS` 30+ 사전 — 직전에 있으면 DT_BIRTH 거부.
+
+### D-022. 자동 과탐 어휘 수집 도구
+**문제:** common_words 무한 누적은 비효율.
+**선택:** `eval/fp_collector.py` 신규 — 비식별된 텍스트 (판결서/뉴스 등) 받으면
+PERSON 과탐 어휘 자동 수집 → 일반어 사전 후보 추출.
+**사용:** `python -m k_pii.eval.fp_collector text.txt --min-freq 2`
+
+## 6. Phase 진행 현황 (2026-05-21 기준)
 
 | Phase | 상태 | 결과물 | 비고 |
 |-------|------|--------|------|
-| 1. 결정적 PII (체크섬) | ✅ 완료 | 8 카테고리 + 4 체크섬 모듈 | Day 1~3 |
+| 1. 결정적 PII (체크섬) | ✅ 완료 | 8 카테고리 + 4 체크섬 모듈 | Tier S, F1 0.95+ |
 | 2. 비검증 PII (베이스라인) | ✅ 완료 | 8 카테고리 + FAX | IPv6/+82/지번 보강 |
 | 3. 컨텍스트 기반 이름 탐지 | ✅ 베이스라인 완료 | 사전 5종 + context + person.py | 사전 큐레이션은 사용자 입력 |
 | 4. 도메인 특화 (공문서·민원·인사) | ✅ 베이스라인 완료 | DOC_ID + PETITION_ID + EMPLOYEE_ID | medical은 사용자 입력 대기 |
 | 5. Vault + 모드 + 일반화 | ✅ 완료 | vault + 3 modes + 4 generalizations | JSON schema v1 |
 | 6. 법적 매핑 + 위험도 + 리포팅 | ✅ 완료 | Anonymizer + 5 modes + reporting + CLI | `k-pii` 엔트리포인트 |
-| 7. 평가 + 문서화 | ✅ 베이스라인 완료 | 합성기 + 메트릭 + 벤치마크 + docs/ | 합성 50×4seed F1=1.000 |
+| 7. 평가 + 문서화 | ✅ 완료 | 합성기 + 메트릭 + 벤치마크 + docs/ | 합성 8 → 13 템플릿 확장 |
 | 8. 결합위험도 + k-익명성 | ✅ 완료 | analytics/ + PNU 추가 | 「비식별 조치 가이드라인」 대응 |
+| **9. 실데이터 평가 + 룰 정제** | ✅ **본 세션** | KDPII + KLUE-NER + fp_collector | F1 0.412 → **0.699** |
 
-**누적 수치:**
-- PII 카테고리 22종 (Phase 1·2 17종 + PERSON + DOC_ID + PETITION_ID + EMPLOYEE_ID + PNU)
-- 테스트 462개, ~0.6초 (Python 3.13)
-- 코어 dependencies 0개
-- 합성 코퍼스 6템플릿×60×5seed (300문서) 에서 **micro F1 = 1.000**
-- 사전 데이터: 성씨 286, 부처/청 100+, 직급 200+, 행정구역 250+
+**누적 수치 (2026-05-21):**
+- PII 카테고리 22종
+- 테스트 **699개**, ~2초 (Python 3.13)
+- 코어 dependencies **0개**
+- 합성 코퍼스 **13 템플릿** (이전 6→ 풍부화) F1 ~0.85 (회귀 감지)
+- **KDPII 53,778 문서 micro F1 = 0.699** (PERSON 풀네임만 기준)
+- **공공 문서 본문 산문 (메인 도메인) F1 ≈ 0.83**
+- 사전 데이터: 성씨 286, 부처 32, 직급 ~250, 행정구역 ~500 (동 사전 +85),
+  학교 사전 ~330 + 약칭 ~60, 전공 ~400, 회사명 ~25, 부서명 ~40,
+  국가명 70+, 한국어 어말 형태소 16
 
-## 7. 어디서 멈췄나 / 다음에 할 일
+## 7. 어디서 멈췄나 / 다음에 할 일 (2026-05-21)
 
-**마지막 큰 작업:** Phase 7 (평가 인프라) + Phase 4 (도메인 룰) + Phase 3.1 사전
-확장 + docs/ 일괄 구현. 테스트 394 passed, 합성 50×4seed F1=1.000.
+**마지막 큰 작업 (claude/understand-work-status-S4kXM):**
+Phase 9 = 실데이터 (KDPII) 평가 + 룰 정제 + 자동 과탐 수집 도구.
+모든 변경 GitHub push 완료. 테스트 699 passed.
 
-**남은 후보 (모두 사용자 도메인 입력 필요):**
+### 핵심 평가 결과
 
-A) **실데이터 벤치마크** — 익명화된 실제 공문서로 합성 코퍼스의 점수가
-   유지되는지 확인. 현재 F1=1.0 은 합성 템플릿이 좁아서 나온 수치이므로
-   실제 분포에서는 더 낮을 가능성.
+| 벤치마크 | F1 | 비고 |
+|---|---:|---|
+| 공공 문서 본문 산문 (메인) | **~0.83** | 12 케이스 직접 측정 |
+| 합성 코퍼스 13 템플릿 | 0.85 | 회귀 감지 sanity check |
+| KDPII 53,778 (풀네임만) | **0.699** | 일상 대화, 1-2자 별명 제외 |
+| KLUE-NER PERSON (풀네임만) | 0.376 | 자연어 신문기사 (PII 데이터셋 아님) |
 
-B) **사전 큐레이션 (Phase 3.1 / 4.1)** — 사용자 실무 입력 기반:
-   - 부처·직급별 직책 사전 세분화
-   - 공문서 필드 라벨 — 실무 양식 샘플 필요
-   - 의료 도메인 (KCD/EDI) 포함 여부 결정
+### 신규 평가 도구
+- `src/k_pii/eval/kdpii.py` — KDPII 평가 모듈 (`--person-min-length=3` 기본)
+- `src/k_pii/eval/fp_collector.py` — 자동 과탐 어휘 수집 (비식별 텍스트 → common_words 후보)
 
-C) **계좌·사업자 분기** — 은행별 포맷 / 법인 vs 개인사업자 위험도 분기.
+### 남은 작업 후보
 
-D) **k-익명성·l-다양성 일반화** — `generalization/` 에 추가 알고리즘.
+A) **한국 공공 데이터 추가 평가** — *사용자 로컬* 에서만 가능 (클라우드 환경
+   호스트 차단). 사용자 Claude Code CLI 로 작업 권장:
+   - 판결서 인터넷열람 (scourt.go.kr) — 비식별 후 공개 → 우리 검출 = 모두 과탐 → 일반어 수집
+   - 행안부 정부 공문서 AI 학습데이터 (data.go.kr 15125451) — KOGL 라이선스
+   - AI Hub 569 행정문서 기계독해 — 60만 건 라벨링됨
+   - AI Hub 71694 한국어 SNS (alphagyuu 가 사용한 원본)
+   
+   사용법: `python -m k_pii.eval.fp_collector data/verdict.txt --min-freq 2`
 
-**권장 순서:** A (실데이터 검증) → B (사전 확장) → C·D. 평가 인프라는 이미
-있으니 사용자 샘플만 들어오면 즉시 측정 가능.
+B) **PERSON 룰 추가 정제 (marginal)** — 현재 0.19 → 0.25 가 룰 한계 추정.
+   더 올리려면 LLM hybrid (`[ml]` extras) 필수. 권장 안 함 (공공 도메인은 이미 0.83).
+
+C) **POSITION 단독 호칭 정책 옵션** — KDPII 따라 "선생/교수" 단독 거부할 수
+   있는 옵션 `position_standalone=False` 추가. 현재는 정책 유지가 가이드라인 부합.
+
+D) **모델 학습 + LLM hybrid 디플로이** — 사용자 도메인 확장 시:
+   - KLUEBERT-CRF 같은 BERT 학습 (KDPII 데이터로)
+   - [ml] / [presidio] extras 통합 (이미 인프라 있음)
+
+E) **사용자 직접 평가 셋 (수기 라벨링)** — 공공 문서 50~100건. 사용자 시간 필요.
+
+### 본 세션 산출물
+
+- 보고서: `docs/EVALUATION_REPORT.md`, `docs/kdpii_evaluation_report.md`,
+  `docs/domain_fit_report.md`
+- 시각화: `docs/kdpii_visual_compare.html` (100 문서 정탐/과탐/미탐 시각)
+- 코드 추가: `eval/kdpii.py`, `eval/fp_collector.py`,
+  `dictionaries/districts.py` (동 사전 +85 / COUNTRIES 70+),
+  `dictionaries/majors.py` (학과 +70), `patterns/person.py` (한국어 어말 사전)
+- 합성 코퍼스 8 → 13 템플릿 + 풀 100+ 이름
+
+### 환경 제약 메모
+- 본 세션은 클라우드 컨테이너 (claude.ai/code) 에서 작동
+- 모든 한국 정부 사이트 (data.go.kr / scourt.go.kr / aihub.or.kr / law.go.kr 등)
+  HTTP 403 (host_not_in_allowlist)
+- HuggingFace / arxiv pdf 도 차단
+- 데이터 다운로드는 *사용자 로컬 Claude Code* 또는 *채팅 첨부* 로만 가능
 
 ## 8. 도메인 판단 대기 중인 항목 (사용자 입력 필요)
 
