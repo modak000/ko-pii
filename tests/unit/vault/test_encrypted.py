@@ -4,6 +4,7 @@ from k_pii.core.types import RiskLevel
 from k_pii.vault.reversible import ReversibleVault
 
 try:
+    import cryptography  # noqa: F401 — runtime dep for k_pii.vault.encrypted
     from k_pii.vault.encrypted import save_encrypted, load_encrypted, is_encrypted_file
     HAS_CRYPTO = True
 except ImportError:

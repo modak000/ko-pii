@@ -27,7 +27,7 @@ class TestApplyFeedback:
 
         # 패치 파일 생성됨
         assert os.path.exists(out_dir / "common_words_additions.txt")
-        body = (out_dir / "common_words_additions.txt").read_text()
+        body = (out_dir / "common_words_additions.txt").read_text(encoding="utf-8")
         assert "검토" in body
 
     def test_below_min_repeat(self, tmp_path):
