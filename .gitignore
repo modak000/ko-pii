@@ -47,9 +47,6 @@ Thumbs.db
 *.vault.json
 vaults/
 
-# Eval results (reproducible via scripts)
-data/results/*.txt
-
 # Local-only working files (not for public repo)
 DESIGN_NOTES.md
 models/

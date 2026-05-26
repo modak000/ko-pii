@@ -1,4 +1,4 @@
-﻿"""Synthetic diverse Korean public-sector PII evaluation corpus.
+"""Synthetic diverse Korean public-sector PII evaluation corpus.
 
 다양한 한국 공공 도메인 (행정·민원·인사·정책·의료·판결·경찰·의료·교육 등)
 50+ 문서를 자연스러운 산문 + 다양한 엣지케이스 난도를 포함하여 작성. ko-pii 의
