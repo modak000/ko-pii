@@ -43,6 +43,7 @@ LEGAL_BASIS_BY_LABEL: dict[str, str] = {
     "EDI_DRUG": "약사법 제31조; 개인정보보호법 제2조",
     "COURT_CASE": "개인정보보호법 제2조; 민사소송법 제65조",
     # 인적 속성 — 준식별자 (KDPII 분류 참조)
+    "NATIONALITY": "개인정보보호법 제2조; 「개인정보 비식별 조치 가이드라인」 준식별자",
     "DT_BIRTH": "개인정보보호법 제2조; 「개인정보 비식별 조치 가이드라인」 준식별자",
     "EDUCATION": "개인정보보호법 제2조; 「개인정보 비식별 조치 가이드라인」 준식별자",
     "MAJOR": "개인정보보호법 제2조; 「개인정보 비식별 조치 가이드라인」 준식별자",
@@ -78,6 +79,7 @@ CATEGORY_BY_LABEL: dict[str, str] = {
     "PRESCRIPTION_ID": "민감정보(건강)",
     "EDI_DRUG": "참조정보",
     "COURT_CASE": "참조정보",
+    "NATIONALITY": "준식별자",
     "DT_BIRTH": "준식별자",
     "EDUCATION": "준식별자",
     "MAJOR": "준식별자",
@@ -113,6 +115,7 @@ _RISK_FLOOR_BY_LABEL: dict[str, RiskLevel] = {
     "PRESCRIPTION_ID": RiskLevel.HIGH,
     "EDI_DRUG": RiskLevel.LOW,
     "COURT_CASE": RiskLevel.MEDIUM,
+    "NATIONALITY": RiskLevel.LOW,
     "DT_BIRTH": RiskLevel.HIGH,
     "EDUCATION": RiskLevel.MEDIUM,
     "MAJOR": RiskLevel.LOW,

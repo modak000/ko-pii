@@ -265,30 +265,24 @@ def detect(text: str) -> Iterator[DetectionResult]:
             },
         )
 
-    # 4) 단독 행정구역 / 국가명 — anchor 필수 (대화체) + dict 매칭 (LOW risk)
-    # 다른 ADDRESS 매치와 인접 (50자 이내) 한 단독 행정구역은 같은 주소의
-    # 일부로 보고 emit 거부 (도로명/지번 매칭과 중복 방지)
+    # 4) 단독 행정구역 — anchor 필수 (대화체) + dict 매칭 (LOW risk)
+    # 국가명은 nationality.py 로 분리 — 여기서는 행정구역만.
     from ko_pii.context.particles import strip_trailing_particle
     ADMIN_ALONE_ADJACENCY = 50
     for m in _PATTERN_ADMIN_TOKEN.finditer(text):
         raw_token = m.group(1)
-        # 조사 떨기 — "서울로/서울에서/서울이" → "서울"
         token, particle = strip_trailing_particle(raw_token)
         if len(token) < 2:
             continue
-        # 국적 접미사 strip ("한국인/미국인" → "한국/미국", country dict 매칭 시만)
-        people_suffix = None
-        if len(token) >= 3 and token.endswith("인") and is_country(token[:-1]):
-            token = token[:-1]
-            people_suffix = "인"
-        # span 은 stem 부분 (조사·접미사 제외)
-        actual_end = m.end() - (len(particle) if particle else 0) - (1 if people_suffix else 0)
+        # 국가명은 nationality.py 에서 처리 — 여기서 건너뜀
+        if is_country(token) or (len(token) >= 3 and token.endswith("인") and is_country(token[:-1])):
+            continue
+        actual_end = m.end() - (len(particle) if particle else 0)
         span = (m.start(), actual_end)
         if any(span[0] < e + ADMIN_ALONE_ADJACENCY and s - ADMIN_ALONE_ADJACENCY < span[1]
                for s, e in seen):
             continue
         kind = None
-        # 광역 (정식명·약칭·시 약칭)
         if is_province(token) or token in {"강원도", "충청도", "전라도", "경상도", "제주도",
                                             "서울시", "부산시", "대구시", "인천시",
                                             "광주시", "대전시", "울산시"}:
@@ -299,18 +293,11 @@ def detect(text: str) -> Iterator[DetectionResult]:
             kind = "city"
         elif is_common_dong(token):
             kind = "dong"
-        elif is_country(token):
-            kind = "country"
         else:
             continue
-        # 대화체 anchor 필수 — 일반 문어체 "25개 자치구 방문" 같은 텍스트 거부.
-        # 단 country (국가명) 은 anchor 없이도 emit (KDPII LCP_COUNTRY 의 86%
-        # 가 anchor 없는 단독 등장: "한국 남자/미국 친구" 등).
         anchor = _has_loose_anchor(text, m.start(), actual_end)
-        if anchor is None and kind != "country":
-            continue
         if anchor is None:
-            anchor = "country_alone"
+            continue
         seen.add(span)
         yield DetectionResult(
             label=LABEL,

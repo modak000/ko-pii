@@ -22,6 +22,7 @@ from ko_pii.patterns import (
     frn,
     ip,
     medical_insurance,
+    nationality,
     passport,
     person,
     personal_attr,
@@ -53,6 +54,7 @@ DETECTORS = (
     vehicle.detect,
     url.detect,
     address.detect,
+    nationality.detect,
     account.detect,
     person.detect,
     # 식의약·법조 도메인
